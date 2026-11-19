@@ -1,0 +1,12 @@
+# Compiled binaries
+ai-dashboard
+dist/
+*.exe
+
+# Runtime state, logs & sensitive credentials
+auth_config.json
+initial_credentials.txt
+chats/
+*.log
+*.tmp
+.DS_Store

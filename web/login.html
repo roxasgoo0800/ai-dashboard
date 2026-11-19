@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign In &bull; AI Control Plane RPG</title>
+<style>
+  @font-face {
+    font-family: 'Plus Jakarta Sans';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('/api/assets/fonts/plus-jakarta-sans.woff2') format('woff2');
+  }
+  :root {
+    --bg: #1a1310;
+    --surface: #251b17;
+    --surface-2: #31241e;
+    --border: #5c4335;
+    --border-hi: #8a6854;
+    --text: #f7ecdd;
+    --text-2: #d6c1aa;
+    --text-3: #a88f77;
+    --amber: #f7c547;
+    --emerald: #34d399;
+    --navy: #1b3b6f;
+    --navy-hover: #254d8f;
+    --navy-border: #3d68b0;
+    --orange: #c24914;
+    --maroon: #7a1c2e;
+    --rpg-lip: rgba(8, 5, 3, 0.72);
+    --rpg-shine: rgba(255, 240, 220, 0.12);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #e6d3bd;
+    --surface: #f6ead9;
+    --surface-2: #ebd9c3;
+    --border: #b89878;
+    --border-hi: #7d5b3e;
+    --text: #2a1c14;
+    --text-2: #573e2c;
+    --text-3: #7d5f47;
+    --amber: #b45309;
+    --emerald: #1b6845;
+    --rpg-lip: rgba(66, 44, 28, 0.28);
+    --rpg-shine: rgba(255, 255, 255, 0.72);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    position: relative; overflow: hidden;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .rpg-ambient-bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .rpg-ambient-grid {
+    position: absolute; inset: -64px;
+    background-image:
+      linear-gradient(to right, rgba(164, 128, 92, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(164, 128, 92, 0.08) 1px, transparent 1px);
+    background-size: 32px 32px;
+    animation: rpgGridDrift 42s linear infinite;
+  }
+  :root[data-theme="dark"] .rpg-ambient-grid {
+    background-image:
+      linear-gradient(to right, rgba(247, 197, 71, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(247, 197, 71, 0.05) 1px, transparent 1px);
+  }
+  @keyframes rpgGridDrift { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(32px,32px,0); } }
+  .rpg-mote {
+    position: absolute; bottom: -12px; width: 4px; height: 4px; background: #c24914; opacity: 0;
+    box-shadow: 0 0 8px rgba(194,73,20,0.45);
+    animation: rpgMoteFloat var(--dur, 18s) linear var(--del, 0s) infinite;
+  }
+  .rpg-mote.gold { background: #f7c547; box-shadow: 0 0 8px rgba(247,197,71,0.55); }
+  .rpg-mote.alt { background: #1b6845; width: 3px; height: 3px; }
+  @keyframes rpgMoteFloat {
+    0% { transform: translate3d(0,0,0); opacity: 0; }
+    15% { opacity: 0.45; }
+    85% { opacity: 0.35; }
+    100% { transform: translate3d(var(--dx, 18px), -104vh, 0); opacity: 0; }
+  }
+  .card {
+    position: relative; z-index: 2; width: 100%; max-width: 430px;
+    background: var(--surface); border: 2px solid var(--border-hi); border-radius: 10px;
+    padding: 22px 24px 22px;
+    box-shadow: inset 0 2px 0 var(--rpg-shine), 0 6px 0 var(--rpg-lip), 0 22px 54px rgba(0,0,0,0.28);
+  }
+  .card-top-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding-bottom: 12px; margin-bottom: 16px; border-bottom: 2px solid var(--border);
+  }
+  .brand-tag {
+    display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono);
+    font-size: 0.67rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--amber);
+  }
+  .theme-mini-btn {
+    padding: 4px 9px; border-radius: 5px; border: 2px solid var(--navy-border);
+    background: var(--navy); color: #f7ecdd; font-size: 0.68rem; font-weight: 700;
+    cursor: pointer; font-family: inherit; box-shadow: 0 2px 0 var(--rpg-lip);
+  }
+  .theme-mini-btn:hover { background: var(--navy-hover); border-color: var(--orange); }
+  .shield-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 14px; }
+  .shield {
+    width: 52px; height: 52px; border-radius: 8px;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 2px solid var(--border-hi); display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 1px 0 var(--rpg-shine), 0 3px 0 var(--rpg-lip);
+  }
+  h1 { margin: 0 0 6px; font-size: 1.18rem; font-weight: 800; letter-spacing: -0.02em; text-align: center; color: var(--text); }
+  .sub { margin: 0 0 16px; font-size: 0.81rem; color: var(--text-2); line-height: 1.48; text-align: center; }
+  .sec-pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 16px; }
+  .sec-pill {
+    font-family: var(--mono); font-size: 0.64rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+    background: var(--surface-2); border: 1.5px solid var(--border); color: var(--emerald);
+  }
+  .err {
+    display: none; margin: 0 0 14px; padding: 9px 11px; border-radius: 7px; font-size: 0.77rem; line-height: 1.45;
+    background: rgba(122,28,46,0.14); border: 2px solid var(--maroon); color: #e11d48; text-align: center; font-weight: 600;
+  }
+  :root[data-theme="dark"] .err { color: #fda4af; }
+  .err.show { display: block; }
+  .status { display: none; margin: 0 0 12px; font-size: 0.78rem; font-family: var(--mono); font-weight: 700; color: var(--amber); text-align: center; }
+  .status.show { display: block; }
+  .gsi-frame {
+    padding: 12px; border-radius: 8px; background: var(--surface-2); border: 2px solid var(--border);
+    box-shadow: inset 0 1px 0 var(--rpg-shine);
+  }
+  .gsi-wrap { min-height: 44px; display: flex; justify-content: center; align-items: center; }
+  .gsi-hint { margin: 10px 0 0; font-size: 0.72rem; color: var(--text-3); text-align: center; line-height: 1.45; }
+  .fallback { margin-top: 16px; border-top: 2px solid var(--border); padding-top: 12px; display: none; }
+  .fallback.visible { display: block; }
+  .fallback summary { cursor: pointer; font-size: 0.74rem; font-weight: 700; color: var(--text-2); user-select: none; text-align: center; }
+  .field { margin-top: 10px; margin-bottom: 10px; }
+  label { display: block; font-size: 0.72rem; font-weight: 700; color: var(--text-2); margin-bottom: 5px; }
+  input {
+    width: 100%; background: var(--surface-2); color: var(--text);
+    border: 2px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    font-size: 0.85rem; outline: none; font-family: inherit;
+  }
+  input:focus { border-color: var(--orange); }
+  .login-btn {
+    width: 100%; margin-top: 6px; border: 2px solid var(--navy-border); border-radius: 6px; padding: 10px 14px; cursor: pointer;
+    font-weight: 700; font-size: 0.85rem; color: #f7ecdd; font-family: inherit;
+    background: var(--navy); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 3px 0 var(--rpg-lip);
+  }
+  .login-btn:hover { background: var(--navy-hover); border-color: var(--orange); }
+  .login-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+</style>
+<script>
+(function(){
+  try {
+    var t = localStorage.getItem('ai_dash_theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGSIScriptReady()"></script>
+</head>
+<body>
+  <div class="rpg-ambient-bg" aria-hidden="true">
+    <div class="rpg-ambient-grid"></div>
+    <span class="rpg-mote gold" style="left:12%;--dur:19s;--del:-3s;--dx:20px;"></span>
+    <span class="rpg-mote" style="left:32%;--dur:22s;--del:-9s;--dx:-18px;"></span>
+    <span class="rpg-mote alt" style="left:55%;--dur:17s;--del:-5s;--dx:16px;"></span>
+    <span class="rpg-mote gold" style="left:76%;--dur:21s;--del:-11s;--dx:-22px;"></span>
+    <span class="rpg-mote" style="left:90%;--dur:20s;--del:-6s;--dx:14px;"></span>
+  </div>
+
+  <div class="card">
+    <div class="card-top-bar">
+      <div class="brand-tag">
+        <svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+          <rect x="2" y="1" width="12" height="14" fill="#3d4d82"/><rect x="3" y="2" width="10" height="12" fill="#222c4e"/>
+          <rect x="4" y="3" width="8" height="5" fill="#0c1020"/><rect x="5" y="4" width="6" height="3" fill="#3cd682"/>
+          <rect x="5" y="1" width="6" height="1" fill="#f7c547"/>
+        </svg>
+        <span>AI CONTROL PLANE &bull; 32-BIT RPG</span>
+      </div>
+      <button type="button" class="theme-mini-btn" id="loginThemeBtn" onclick="toggleLoginTheme()">Dark</button>
+    </div>
+
+    <div class="shield-row">
+      <div class="shield">
+        <svg width="28" height="28" viewBox="0 0 16 16" shape-rendering="crispEdges">
+          <rect x="3" y="2" width="10" height="8" fill="#f7c547"/><rect x="4" y="3" width="8" height="6" fill="#1b3b6f"/>
+          <rect x="4" y="10" width="8" height="2" fill="#f7c547"/><rect x="5" y="10" width="6" height="2" fill="#2563eb"/>
+          <rect x="6" y="12" width="4" height="2" fill="#f7c547"/><rect x="7" y="14" width="2" height="1" fill="#c24914"/>
+          <rect x="7" y="4" width="2" height="5" fill="#34d399"/><rect x="5" y="5" width="6" height="2" fill="#34d399"/>
+        </svg>
+      </div>
+    </div>
+
+    <h1>Guild Gatekeeper &bull; Sign In</h1>
+    <p class="sub">Masuk menggunakan akun Google terdaftar untuk mengakses AI Chat Studio, GPU Telemetry, &amp; Workspace.</p>
+    <div class="sec-pills">
+      <span class="sec-pill">JWT HS256</span>
+      <span class="sec-pill">CSRF Guard</span>
+      <span class="sec-pill">Google Whitelist</span>
+    </div>
+
+    <div class="err" id="errBox"></div>
+    <div class="status" id="statusBox">Memverifikasi akun Google...</div>
+    <div class="gsi-frame">
+      <div class="gsi-wrap" id="gsiBtnWrap"></div>
+    </div>
+    <p class="gsi-hint" id="gsiHint" style="display:none;"></p>
+
+    <details class="fallback" id="fallbackBox">
+      <summary>Login Alternatif (Username &amp; Password)</summary>
+      <form id="loginForm">
+        <div class="field">
+          <label for="u">Username</label>
+          <input id="u" type="text" autocomplete="username" placeholder="Username" required />
+        </div>
+        <div class="field">
+          <label for="p">Password</label>
+          <input id="p" type="password" autocomplete="current-password" placeholder="Password" required />
+        </div>
+        <button class="login-btn" id="btn" type="submit">Masuk Dashboard</button>
+      </form>
+    </details>
+  </div>
+
+<script>
+var providersCfg = null;
+var gsiScriptReady = false;
+var gsiInitialized = false;
+
+function syncLoginThemeBtn() {
+  var cur = document.documentElement.getAttribute('data-theme') || 'light';
+  var b = document.getElementById('loginThemeBtn');
+  if (b) b.textContent = cur === 'light' ? 'Dark' : 'Light';
+}
+function toggleLoginTheme() {
+  var cur = document.documentElement.getAttribute('data-theme') || 'light';
+  var next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('ai_dash_theme', next); } catch (e) {}
+  syncLoginThemeBtn();
+}
+syncLoginThemeBtn();
+
+function showErr(msg) {
+  var errBox = document.getElementById('errBox');
+  if (!msg) {
+    errBox.classList.remove('show');
+    errBox.textContent = '';
+    return;
+  }
+  errBox.textContent = msg;
+  errBox.classList.add('show');
+}
+
+function setStatus(on, txt) {
+  var st = document.getElementById('statusBox');
+  if (txt) st.textContent = txt;
+  st.classList.toggle('show', !!on);
+}
+
+async function handleGoogleCredential(response) {
+  showErr('');
+  if (!response || !response.credential) {
+    showErr('Gagal menerima kredensial Google.');
+    return;
+  }
+  setStatus(true, 'Memverifikasi akun Google...');
+  try {
+    var r = await fetch('/api/auth/google', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: response.credential })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        try { window.google.accounts.id.disableAutoSelect(); } catch (e) {}
+      }
+      showErr(d.error || ('Autentikasi Google ditolak (HTTP ' + r.status + ')'));
+      return;
+    }
+    window.location.replace('/');
+  } catch (e) {
+    showErr('Gagal terhubung ke server autentikasi.');
+  } finally {
+    setStatus(false);
+  }
+}
+
+function tryRenderGSI() {
+  if (gsiInitialized || !providersCfg) return;
+  if (!providersCfg.google_enabled || !providersCfg.google_client_id) {
+    var hint = document.getElementById('gsiHint');
+    hint.textContent = 'Google Sign-In belum dikonfigurasi.';
+    hint.style.display = 'block';
+    return;
+  }
+  if (!gsiScriptReady || !window.google || !window.google.accounts || !window.google.accounts.id) {
+    return;
+  }
+  gsiInitialized = true;
+  try {
+    window.google.accounts.id.initialize({
+      client_id: providersCfg.google_client_id,
+      callback: handleGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+    window.google.accounts.id.renderButton(
+      document.getElementById('gsiBtnWrap'),
+      { theme: 'filled_black', size: 'large', shape: 'rectangular', text: 'signin_with', width: 320 }
+    );
+  } catch (e) {
+    var hint = document.getElementById('gsiHint');
+    hint.textContent = 'Pastikan origin URL ini terdaftar di Google Cloud Console OAuth Client ID.';
+    hint.style.display = 'block';
+  }
+}
+
+function onGSIScriptReady() {
+  gsiScriptReady = true;
+  tryRenderGSI();
+}
+
+(async function initProviders() {
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    gsiScriptReady = true;
+  }
+  try {
+    var r = await fetch('/api/auth/providers', { credentials: 'same-origin' });
+    if (r.ok) {
+      providersCfg = await r.json();
+      if (providersCfg.password_enabled) {
+        document.getElementById('fallbackBox').classList.add('visible');
+      }
+      tryRenderGSI();
+    }
+  } catch (e) {
+    showErr('Gagal memuat konfigurasi login.');
+  }
+})();
+
+document.getElementById('loginForm').addEventListener('submit', async function (ev) {
+  ev.preventDefault();
+  var u = document.getElementById('u').value.trim();
+  var p = document.getElementById('p').value;
+  var btn = document.getElementById('btn');
+  showErr('');
+  btn.disabled = true;
+  btn.textContent = 'Memverifikasi...';
+  try {
+    var r = await fetch('/api/auth/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      showErr(d.error || ('Login gagal (HTTP ' + r.status + ')'));
+      return;
+    }
+    window.location.replace('/');
+  } catch (e) {
+    showErr('Koneksi gagal.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Masuk Dashboard';
+  }
+});
+</script>
+</body>
+</html>
