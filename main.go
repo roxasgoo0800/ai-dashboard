@@ -83,6 +83,8 @@ func main() {
 	http.HandleFunc("/api/metrics", auth.WithAuth(telemetry.HandleMetrics))
 	http.HandleFunc("/api/history", auth.WithAuth(telemetry.HandleHistory))
 	http.HandleFunc("/api/stream", auth.WithAuth(telemetry.HandleStream))
+	http.HandleFunc("/api/energy", auth.WithAuth(telemetry.HandleEnergyAPI))
+	http.HandleFunc("/api/energy/settings", auth.WithAuth(telemetry.HandleEnergySettings))
 	http.HandleFunc("/api/action/unload-ollama", auth.WithAuth(telemetry.HandleUnloadOllama))
 	http.HandleFunc("/api/action/free-comfy", auth.WithAuth(telemetry.HandleFreeComfy))
 	http.HandleFunc("/api/action/restart-ollama", auth.WithAuth(telemetry.HandleRestartOllama))

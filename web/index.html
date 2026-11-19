@@ -2522,6 +2522,128 @@
           </div>
           <div class="rec-list" id="usageRecList"></div>
         </section>
+
+        <!-- POWER, VOLTAGE (220V), kWh & BIAYA LISTRIK PLN (RUPIAH) -->
+        <div class="grid-12">
+          <div class="card col-4">
+            <div class="card-top">
+              <div class="card-title-wrap">
+                <div class="card-sprite-frame">
+                  <svg class="px-ico px-ico-lg" viewBox="0 0 24 24" shape-rendering="crispEdges">
+                    <rect x="11" y="2" width="5" height="6" fill="#f7c547"/>
+                    <rect x="7" y="8" width="11" height="5" fill="#c24914"/>
+                    <rect x="9" y="13" width="6" height="8" fill="#f7c547"/>
+                    <rect x="11" y="5" width="3" height="5" fill="#fef08a"/>
+                  </svg>
+                </div>
+                <div class="card-title-stack">
+                  <div class="card-title">Live Voltage &amp; Power</div>
+                  <div class="rpg-metaphor">RTX 3060 + System Watt &amp; Ampere</div>
+                </div>
+              </div>
+              <span class="tag tag-warn" id="energyVoltTag">220V AC</span>
+            </div>
+            <div class="big-val" id="energyLiveWatts">-- W</div>
+            <div class="kv-grid">
+              <div class="kv"><span>GPU (nvidia-smi)</span><strong id="energyGpuWatts">-- W</strong></div>
+              <div class="kv"><span>Est. System</span><strong id="energySysWatts">-- W</strong></div>
+              <div class="kv"><span>Arus Listrik</span><strong id="energyLiveAmps">-- A</strong></div>
+              <div class="kv"><span>Tegangan PLN</span><strong id="energyVoltVal">220 V</strong></div>
+            </div>
+          </div>
+
+          <div class="card col-4">
+            <div class="card-top">
+              <div class="card-title-wrap">
+                <div class="card-sprite-frame">
+                  <svg class="px-ico px-ico-lg" viewBox="0 0 24 24" shape-rendering="crispEdges">
+                    <rect x="3" y="4" width="18" height="16" fill="#1c1412"/>
+                    <rect x="4" y="5" width="16" height="14" fill="#1b6845"/>
+                    <rect x="6" y="7" width="12" height="10" fill="#34d399"/>
+                    <rect x="9" y="9" width="6" height="6" fill="#fef08a"/>
+                  </svg>
+                </div>
+                <div class="card-title-stack">
+                  <div class="card-title">Biaya Listrik (Rp &amp; kWh)</div>
+                  <div class="rpg-metaphor">PLN kWh Meter &amp; Tagihan</div>
+                </div>
+              </div>
+              <span class="tag tag-ok" id="energyTariffTag">Rp 1.445/kWh</span>
+            </div>
+            <div class="big-val" id="energyMonthCost">Rp 0</div>
+            <div class="kv-grid">
+              <div class="kv"><span>Hari Ini</span><strong id="energyTodayCost">Rp 0 (0 kWh)</strong></div>
+              <div class="kv"><span>Bulan Ini</span><strong id="energyMonthKwh">0 kWh</strong></div>
+              <div class="kv"><span>Proyeksi Bulan</span><strong id="energyProjCost">Rp 0</strong></div>
+              <div class="kv"><span>Total Tercatat</span><strong id="energyTotalCost">Rp 0</strong></div>
+            </div>
+          </div>
+
+          <div class="card col-4">
+            <div class="card-top">
+              <div class="card-title-wrap">
+                <div class="card-sprite-frame">
+                  <svg class="px-ico px-ico-lg" viewBox="0 0 24 24" shape-rendering="crispEdges">
+                    <rect x="4" y="4" width="16" height="16" fill="#1b3b6f"/>
+                    <rect x="6" y="6" width="12" height="4" fill="#f7c547"/>
+                    <rect x="6" y="12" width="5" height="6" fill="#e6d3bd"/>
+                    <rect x="13" y="12" width="5" height="6" fill="#c24914"/>
+                  </svg>
+                </div>
+                <div class="card-title-stack">
+                  <div class="card-title">Pengaturan Tarif PLN</div>
+                  <div class="rpg-metaphor">Sesuaikan Golongan Listrik</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:0.75rem;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-xs" onclick="applyPlnPreset(1444.70)">1300-2200VA (Rp 1.444,7)</button>
+                <button type="button" class="btn btn-xs" onclick="applyPlnPreset(1699.53)">3500VA+ (Rp 1.699,5)</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div>
+                  <div style="font-size:0.67rem;font-family:var(--mono);color:var(--text-3);margin-bottom:3px;">Tarif (Rp / kWh)</div>
+                  <input id="inpPlnTariff" type="number" step="0.01" min="100" max="20000" value="1444.70" style="width:100%;padding:6px 8px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);font-family:var(--mono);font-size:0.78rem;" />
+                </div>
+                <div>
+                  <div style="font-size:0.67rem;font-family:var(--mono);color:var(--text-3);margin-bottom:3px;">Base System (Watt)</div>
+                  <input id="inpSysBaseW" type="number" step="1" min="10" max="1000" value="55" style="width:100%;padding:6px 8px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);font-family:var(--mono);font-size:0.78rem;" />
+                </div>
+              </div>
+              <button type="button" class="btn btn-warn" onclick="saveEnergySettings(this)" style="width:100%;justify-content:center;">Simpan Tarif &amp; Hitung Ulang</button>
+            </div>
+          </div>
+        </div>
+
+        <section class="card">
+          <div class="card-top">
+            <div class="card-title-wrap">
+              <div class="card-title-stack">
+                <div class="card-title">Riwayat Harian kWh &amp; Biaya Listrik (Rp)</div>
+                <div class="rpg-metaphor">Tercatat Otomatis Setiap Detik dari GPU nvidia-smi + System CPU</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-xs" onclick="loadEnergyView()">Refresh kWh</button>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>GPU kWh</th>
+                  <th>Total kWh</th>
+                  <th>Biaya (Rp)</th>
+                  <th>Avg / Peak Watt</th>
+                  <th>Durasi Aktif</th>
+                </tr>
+              </thead>
+              <tbody id="energyDailyBody">
+                <tr><td colspan="6" style="color:var(--text-3);text-align:center;">Memuat data pemakaian listrik...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <!-- MEMORY & FLUSH CONTROL CENTER VIEW -->
@@ -2993,11 +3115,100 @@ async function loadUsageView() {
   usageMonthStr = m;
   try {
     const r = await apiFetch('/api/usage?month=' + encodeURIComponent(m));
-    if (!r.ok) return;
-    const data = await r.json();
-    usageLastData = data;
-    renderUsageView(data);
+    if (r.ok) {
+      const data = await r.json();
+      usageLastData = data;
+      renderUsageView(data);
+    }
   } catch (e) {}
+  loadEnergyView();
+}
+
+function formatIDR(v) {
+  return 'Rp ' + Math.round(Number(v || 0)).toLocaleString('id-ID');
+}
+
+async function loadEnergyView() {
+  const m = usageMonthStr || currentMonthISO();
+  try {
+    const r = await apiFetch('/api/energy?month=' + encodeURIComponent(m));
+    if (!r.ok) return;
+    const d = await r.json();
+    renderEnergyView(d);
+  } catch (e) {}
+}
+
+function renderEnergyView(d) {
+  if (!d) return;
+  const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  const s = d.settings || {};
+  const volt = Number(s.voltage_v || 220);
+  const tariff = Number(s.tariff_idr_per_kwh || 1444.7);
+  setText('energyVoltTag', volt + 'V AC');
+  setText('energyVoltVal', volt + ' V');
+  setText('energyTariffTag', 'Rp ' + Math.round(tariff).toLocaleString('id-ID') + '/kWh');
+  setText('energyLiveWatts', (d.current_total_watts || 0) + ' W');
+  setText('energyGpuWatts', (d.current_gpu_watts || 0) + ' W');
+  setText('energySysWatts', (d.current_system_watts || 0) + ' W');
+  setText('energyLiveAmps', (d.current_amps || 0) + ' A');
+
+  setText('energyMonthCost', formatIDR(d.month_cost_idr));
+  setText('energyTodayCost', formatIDR(d.today_cost_idr) + ' (' + Number(d.today_kwh || 0).toFixed(3) + ' kWh)');
+  setText('energyMonthKwh', Number(d.month_kwh || 0).toFixed(3) + ' kWh');
+  setText('energyProjCost', formatIDR(d.projected_month_cost_idr));
+  setText('energyTotalCost', formatIDR(d.total_cost_idr) + ' (' + Number(d.total_kwh || 0).toFixed(2) + ' kWh)');
+
+  const inpT = document.getElementById('inpPlnTariff');
+  const inpB = document.getElementById('inpSysBaseW');
+  if (inpT && document.activeElement !== inpT) inpT.value = String(tariff);
+  if (inpB && document.activeElement !== inpB) inpB.value = String(s.system_base_watts || 55);
+
+  const tb = document.getElementById('energyDailyBody');
+  if (tb) {
+    const rows = Array.isArray(d.daily) ? d.daily.slice().reverse() : [];
+    if (rows.length === 0) {
+      tb.innerHTML = '<tr><td colspan="6" style="color:var(--text-3);text-align:center;">Belum ada catatan kWh untuk bulan ini (sedang merekam setiap detik).</td></tr>';
+    } else {
+      tb.innerHTML = rows.map(r =>
+        '<tr>' +
+          '<td style="font-family:var(--mono);font-weight:700;">' + escHtml(r.date) + '</td>' +
+          '<td style="font-family:var(--mono);">' + Number(r.gpu_kwh || 0).toFixed(4) + ' kWh</td>' +
+          '<td style="font-family:var(--mono);font-weight:700;">' + Number(r.total_kwh || 0).toFixed(4) + ' kWh</td>' +
+          '<td style="font-family:var(--mono);font-weight:800;color:var(--amber);">' + formatIDR(r.cost_idr) + '</td>' +
+          '<td style="font-family:var(--mono);">' + (r.avg_watts || 0) + ' W / ' + (r.peak_watts || 0) + ' W</td>' +
+          '<td style="font-family:var(--mono);">' + Number(r.active_hours || 0).toFixed(2) + ' jam</td>' +
+        '</tr>'
+      ).join('');
+    }
+  }
+}
+
+function applyPlnPreset(val) {
+  const inp = document.getElementById('inpPlnTariff');
+  if (inp) inp.value = String(val);
+}
+
+async function saveEnergySettings(btn) {
+  const t = parseFloat((document.getElementById('inpPlnTariff') || {}).value || '1444.70');
+  const b = parseFloat((document.getElementById('inpSysBaseW') || {}).value || '55');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch('/api/energy/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tariff_idr_per_kwh: t, system_base_watts: b, voltage_v: 220 })
+    });
+    if (!r.ok) {
+      showToast('Gagal menyimpan tarif PLN (periksa angka input)', false);
+      return;
+    }
+    showToast('Tarif listrik PLN diperbarui!', true);
+    loadEnergyView();
+  } catch (e) {
+    showToast('Gagal menyimpan tarif: ' + e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function renderUsageView(d) {

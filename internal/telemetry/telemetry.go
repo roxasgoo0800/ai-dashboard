@@ -742,6 +742,7 @@ func StartSampler() {
 			histRing = histRing[len(histRing)-60:]
 		}
 		histMu.Unlock()
+		recordEnergySample(snap)
 	}
 	record()
 	go func() {
