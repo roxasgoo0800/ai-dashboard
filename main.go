@@ -3080,7 +3080,16 @@ const indexHTML = `<!DOCTYPE html>
                 <input class="chat-cwd" id="chatCwd" type="text" value="" style="display:none;" placeholder="/home/rizal/Documents/nama-project" title="Custom Working Directory (otomatis dibuat jika belum ada)" oninput="updateCwdBadge()" />
                 <span class="cwd-badge" id="cwdPreviewBadge" onclick="copyActiveCwd()" title="Klik untuk salin path workspace aktif">~/Documents/chat/&lt;auto&gt;</span>
               </div>
-              <div class="chat-topbar-right">
+              <div class="chat-topbar-right" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-xs btn-warn" id="downloadZipBtn" onclick="downloadWorkspaceZip(this)" title="Download seluruh source code &amp; gambar workspace sesi ini sebagai .zip">
+                  <svg class="px-ico" style="width:13px;height:13px;" viewBox="0 0 16 16" shape-rendering="crispEdges">
+                    <rect x="2" y="3" width="12" height="10" fill="#78350f"/>
+                    <rect x="3" y="4" width="10" height="3" fill="#f7c547"/>
+                    <rect x="3" y="8" width="10" height="4" fill="#d97706"/>
+                    <rect x="7" y="6" width="2" height="4" fill="#1b3b6f"/>
+                  </svg>
+                  <span>Download ZIP</span>
+                </button>
                 <button class="mcp-pill" id="mcpStatusPill" onclick="toggleMCPMode()" title="Klik untuk Connect / Disconnect MCP (local-image-gen)">
                   <span class="mcp-dot"></span>
                   <span id="mcpStatusText">MCP: Checking...</span>
@@ -6095,6 +6104,41 @@ function copyActiveCwd() {
   const txt = p === '__auto__' ? (resolvedSessionCwd || '/home/rizal/Documents/chat') : p;
   navigator.clipboard.writeText(txt);
   showToast('Path disalin: ' + formatShortPath(txt), true);
+}
+
+async function downloadWorkspaceZip(btn) {
+  if (!activeChatId) {
+    showToast('Belum ada sesi aktif — kirim prompt atau buat file/gambar dulu.', false);
+    return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch('/api/chats/' + encodeURIComponent(activeChatId) + '/zip');
+    if (!r.ok) {
+      let errMsg = 'Gagal membuat ZIP (HTTP ' + r.status + ')';
+      try { const j = await r.json(); if (j && j.error) errMsg = j.error; } catch (e) {}
+      showToast(errMsg, false);
+      return;
+    }
+    const blob = await r.blob();
+    let fname = activeChatId + '.zip';
+    const cd = r.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^";]+)"?/i);
+    if (m && m[1]) fname = m[1];
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast('ZIP diunduh: ' + fname, true);
+  } catch (e) {
+    showToast('Gagal mengunduh ZIP: ' + e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function onCwdPresetChange() {

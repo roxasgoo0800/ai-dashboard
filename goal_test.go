@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -1726,5 +1727,51 @@ func TestSecurityPathTraversalAndSecretsBlocked(t *testing.T) {
 	}
 	if rrPng.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("expected X-Content-Type-Options: nosniff on served media")
+	}
+}
+
+func TestWorkspaceZipExport(t *testing.T) {
+	wsDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(wsDir, "index.html"), []byte("<h1>Hello Vibecode</h1>"), 0o644)
+	_ = os.MkdirAll(filepath.Join(wsDir, "assets"), 0o755)
+	_ = os.WriteFile(filepath.Join(wsDir, "assets", "hero.png"), []byte("\x89PNG\r\n\x1a\n"), 0o644)
+	// Sensitive/ignored files that must NOT be included
+	_ = os.MkdirAll(filepath.Join(wsDir, ".git"), 0o755)
+	_ = os.WriteFile(filepath.Join(wsDir, ".git", "config"), []byte("[core]"), 0o644)
+	_ = os.WriteFile(filepath.Join(wsDir, ".env"), []byte("SECRET=123"), 0o644)
+
+	cid := fmt.Sprintf("test_zip_%d", time.Now().UnixNano())
+	defer func() {
+		handleChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/chats/"+cid, nil))
+	}()
+	saveSessionFile(ChatSession{
+		ID:    cid,
+		Title: "Vibecode Landing Page",
+		Cwd:   wsDir,
+	})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/chats/"+cid+"/zip", nil)
+	handleChatSession(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /zip, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/zip" {
+		t.Fatalf("expected application/zip, got %q", ct)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(rr.Body.Bytes()), int64(rr.Body.Len()))
+	if err != nil {
+		t.Fatalf("invalid zip output: %v", err)
+	}
+	found := map[string]bool{}
+	for _, f := range zr.File {
+		found[f.Name] = true
+	}
+	if !found["index.html"] || !found["assets/hero.png"] {
+		t.Fatalf("expected index.html and assets/hero.png in zip, got %+v", found)
+	}
+	if found[".git/config"] || found[".env"] {
+		t.Fatalf("sensitive files leaked into zip: %+v", found)
 	}
 }

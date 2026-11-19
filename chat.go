@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -1964,6 +1965,181 @@ func handleChatDownload(w http.ResponseWriter, r *http.Request) {
 	safeServeAllowedPath(w, r, r.URL.Query().Get("path"), false, true)
 }
 
+func isPathUnderAllowedRoots(realPath string) bool {
+	realPath = filepath.Clean(realPath)
+	for _, root := range allowedServeRoots {
+		realRoot, rerr := filepath.EvalSymlinks(strings.TrimSuffix(root, "/"))
+		if rerr == nil {
+			root = filepath.Clean(realRoot) + "/"
+		}
+		if strings.HasPrefix(realPath+"/", root) || strings.HasPrefix(realPath, root) {
+			return true
+		}
+	}
+	return false
+}
+
+func handleChatWorkspaceZip(w http.ResponseWriter, r *http.Request, id string) {
+	var sess ChatSession
+	if run := getActiveRun(id); run != nil {
+		sess = snapshotRunSession(run)
+	} else {
+		p := filepath.Join(getChatsDir(), id+".json")
+		chatStoreMu.Lock()
+		b, err := os.ReadFile(p)
+		chatStoreMu.Unlock()
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "Sesi chat belum tersimpan atau workspace kosong."})
+			return
+		}
+		if json.Unmarshal(b, &sess) != nil {
+			http.Error(w, "Invalid session", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	cwd := strings.TrimSpace(sess.Cwd)
+	if cwd == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "Workspace belum memiliki folder."})
+		return
+	}
+	realCwd, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "Folder workspace belum dibuat atau kosong."})
+		return
+	}
+	realCwd = filepath.Clean(realCwd)
+	if !isPathUnderAllowedRoots(realCwd) || isSensitivePath(realCwd) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	type zipEntryItem struct {
+		diskPath string
+		relName  string
+		size     int64
+	}
+	var entries []zipEntryItem
+	addedDisk := map[string]bool{}
+	addedRel := map[string]bool{}
+	var totalBytes int64
+	const maxFileBytes = 50 * 1024 * 1024
+	const maxTotalBytes = 200 * 1024 * 1024
+
+	skipDirs := map[string]bool{
+		".git": true, "node_modules": true, ".venv": true, "venv": true,
+		"__pycache__": true, ".next": true, "dist": true, "build": true,
+	}
+
+	_ = filepath.WalkDir(realCwd, func(fpath string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if fpath != realCwd && (strings.HasPrefix(name, ".") || skipDirs[strings.ToLower(name)]) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if isSensitivePath(fpath) {
+			return nil
+		}
+		info, ierr := d.Info()
+		if ierr != nil || info.Size() <= 0 || info.Size() > maxFileBytes {
+			return nil
+		}
+		if totalBytes+info.Size() > maxTotalBytes {
+			return filepath.SkipAll
+		}
+		rel, rerr := filepath.Rel(realCwd, fpath)
+		if rerr != nil || strings.HasPrefix(rel, "..") {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		entries = append(entries, zipEntryItem{diskPath: fpath, relName: rel, size: info.Size()})
+		addedDisk[fpath] = true
+		addedRel[rel] = true
+		totalBytes += info.Size()
+		return nil
+	})
+
+	// Also collect any tool-produced files/media from this chat session not already in realCwd
+	for _, m := range sess.Messages {
+		for _, tl := range m.Tools {
+			cand := strings.TrimSpace(tl.FilePath)
+			if cand == "" && strings.Contains(tl.MediaURL, "path=") {
+				if u, uerr := url.Parse(tl.MediaURL); uerr == nil {
+					cand = u.Query().Get("path")
+				}
+			}
+			if cand == "" {
+				continue
+			}
+			realCand, rerr := filepath.EvalSymlinks(filepath.Clean(cand))
+			if rerr != nil || addedDisk[realCand] || !isPathUnderAllowedRoots(realCand) || isSensitivePath(realCand) {
+				continue
+			}
+			info, ierr := os.Stat(realCand)
+			if ierr != nil || info.IsDir() || info.Size() <= 0 || info.Size() > maxFileBytes {
+				continue
+			}
+			if totalBytes+info.Size() > maxTotalBytes {
+				continue
+			}
+			relName := filepath.Base(realCand)
+			if addedRel[relName] {
+				relName = "media/" + relName
+			}
+			entries = append(entries, zipEntryItem{diskPath: realCand, relName: relName, size: info.Size()})
+			addedDisk[realCand] = true
+			addedRel[relName] = true
+			totalBytes += info.Size()
+		}
+	}
+
+	if len(entries) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "Workspace masih kosong — belum ada file atau gambar untuk di-zip."})
+		return
+	}
+
+	slug := slugifyWorkspaceName(sess.Title)
+	if slug == "" {
+		slug = slugifyWorkspaceName(filepath.Base(realCwd))
+	}
+	if slug == "" {
+		slug = id
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", slug+".zip"))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	zw := zip.NewWriter(w)
+	for _, ent := range entries {
+		f, ferr := os.Open(ent.diskPath)
+		if ferr != nil {
+			continue
+		}
+		zf, zerr := zw.Create(ent.relName)
+		if zerr == nil {
+			_, _ = io.Copy(zf, f)
+		}
+		_ = f.Close()
+	}
+	_ = zw.Close()
+}
+
 var chatStoreMu sync.Mutex
 
 func getChatsDir() string {
@@ -2979,6 +3155,11 @@ func handleChatSession(w http.ResponseWriter, r *http.Request) {
 			"restored": restored,
 			"deleted":  deleted,
 		})
+		return
+	}
+
+	if sub == "zip" && r.Method == http.MethodGet {
+		handleChatWorkspaceZip(w, r, id)
 		return
 	}
 
