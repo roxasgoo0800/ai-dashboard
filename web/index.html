@@ -2791,7 +2791,7 @@
                 </div>
                 <div>
                   <div style="font-size:0.67rem;font-family:var(--mono);color:var(--text-3);margin-bottom:3px;">Base System (Watt)</div>
-                  <input id="inpSysBaseW" type="number" step="1" min="10" max="1000" value="55" style="width:100%;padding:6px 8px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);font-family:var(--mono);font-size:0.78rem;" />
+                  <input id="inpSysBaseW" type="number" step="1" min="10" max="1000" value="65" style="width:100%;padding:6px 8px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);font-family:var(--mono);font-size:0.78rem;" />
                 </div>
               </div>
               <button type="button" class="btn btn-warn" onclick="saveEnergySettings(this)" style="width:100%;justify-content:center;">Simpan Tarif &amp; Hitung Ulang</button>
@@ -3354,7 +3354,7 @@ function renderEnergyView(d) {
   const inpT = document.getElementById('inpPlnTariff');
   const inpB = document.getElementById('inpSysBaseW');
   if (inpT && document.activeElement !== inpT) inpT.value = String(tariff);
-  if (inpB && document.activeElement !== inpB) inpB.value = String(s.system_base_watts || 55);
+  if (inpB && document.activeElement !== inpB) inpB.value = String(s.system_base_watts || 65);
 
   if (usageLastData) renderUsageView(usageLastData);
 }
@@ -3366,7 +3366,7 @@ function applyPlnPreset(val) {
 
 async function saveEnergySettings(btn) {
   const t = parseFloat((document.getElementById('inpPlnTariff') || {}).value || '1444.70');
-  const b = parseFloat((document.getElementById('inpSysBaseW') || {}).value || '55');
+  const b = parseFloat((document.getElementById('inpSysBaseW') || {}).value || '65');
   if (btn) btn.disabled = true;
   try {
     const r = await apiFetch('/api/energy/settings', {

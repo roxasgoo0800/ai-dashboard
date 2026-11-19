@@ -237,13 +237,13 @@ var mcpTools = []map[string]any{
 						"description": "'general' = Realistic photo / cinematic SDXL; 'illustration' = 2D anime, Ghibli, manga, cartoon, digital illustration.",
 					},
 					"negative_prompt":      map[string]any{"type": "string"},
-					"width":                map[string]any{"type": "integer"},
-					"height":               map[string]any{"type": "integer"},
-					"steps":                map[string]any{"type": "integer"},
+					"width":                map[string]any{"type": "integer", "description": "Output width in pixels. Landscape 16:9: 1280 (720p), 1920 (1080p), 2560 (1440p), 3840 (2160p/4K), or 1216. Portrait: 720, 1080, 1440, 2160, or 832. Square: 1024."},
+					"height":               map[string]any{"type": "integer", "description": "Output height in pixels. Landscape 16:9: 720 (720p), 1080 (1080p), 1440 (1440p), 2160 (2160p/4K), or 832. Portrait: 1280, 1920, 2560, 3840, or 1216. Square: 1024."},
+					"steps":                map[string]any{"type": "integer", "description": "Sampling steps (10-60, default 28; up to 60 for maximum detail)."},
 					"reference_image_path": map[string]any{"type": "string"},
 					"denoise": map[string]any{
 						"type":        "number",
-						"description": "img2img strength: 0.15-0.30 for subtle 1:1 retouch in same style; 0.55-0.70 for style transfer (e.g. photo to Ghibli/anime) or outfit change.",
+						"description": "img2img strength strictly 0.00-0.20 (clamped at 0.20 max to preserve image quality).",
 					},
 				},
 				"required": []string{"prompt"},
@@ -689,15 +689,21 @@ func runToolCallWithTimeout(ctx context.Context, cwd string, currentTurnPastedPa
 		rawRef := strings.TrimSpace(strArg("reference_image_path", ""))
 		den := floatArg("denoise", 0.15)
 		resolvedRef := "none"
-		if currentTurnPastedPath != "" && den > 0.01 {
+		if currentTurnPastedPath != "" && den >= 0.0 {
 			resolvedRef = currentTurnPastedPath
-		} else if !isDisableRefValue(rawRef) && !strings.EqualFold(rawRef, "auto") && !strings.Contains(strings.ToLower(rawRef), "image") && den > 0.01 {
+		} else if !isDisableRefValue(rawRef) && !strings.EqualFold(rawRef, "auto") && !strings.Contains(strings.ToLower(rawRef), "image") && den >= 0.0 {
 			if info, err := os.Stat(rawRef); err == nil && !info.IsDir() {
 				resolvedRef = rawRef
 			}
 		}
 		if resolvedRef == "none" {
 			den = 1.0
+		} else {
+			if den < 0.0 {
+				den = 0.0
+			} else if den > 0.20 {
+				den = 0.20
+			}
 		}
 		seedVal := int64(intArg("seed", 0))
 		if seedVal <= 0 {
@@ -708,20 +714,63 @@ func runToolCallWithTimeout(ctx context.Context, cwd string, currentTurnPastedPa
 			return ToolResult{Output: "Error: generate_image requires a non-empty prompt"}
 		}
 		imgNeg := strArg("negative_prompt", "")
+		stepsVal := intArg("steps", 28)
+		if stepsVal < 10 {
+			stepsVal = 10
+		} else if stepsVal > 60 {
+			stepsVal = 60
+		}
+		reqW := intArg("width", 1024)
+		reqH := intArg("height", 1024)
+		if reqW == 1024 && reqH == 1024 {
+			lowP := strings.ToLower(imgPrompt)
+			isLand := strings.Contains(lowP, "landscape") || strings.Contains(lowP, "16:9") || strings.Contains(lowP, "wide")
+			isPort := strings.Contains(lowP, "portrait") || strings.Contains(lowP, "9:16") || strings.Contains(lowP, "vertical")
+			switch {
+			case strings.Contains(lowP, "2160p") || strings.Contains(lowP, "4k"):
+				if isPort {
+					reqW, reqH = 2160, 3840
+				} else {
+					reqW, reqH = 3840, 2160
+				}
+			case strings.Contains(lowP, "1440p") || strings.Contains(lowP, "2k"):
+				if isPort {
+					reqW, reqH = 1440, 2560
+				} else {
+					reqW, reqH = 2560, 1440
+				}
+			case strings.Contains(lowP, "1080p") || strings.Contains(lowP, "full hd"):
+				if isPort {
+					reqW, reqH = 1080, 1920
+				} else {
+					reqW, reqH = 1920, 1080
+				}
+			case strings.Contains(lowP, "720p"):
+				if isPort {
+					reqW, reqH = 720, 1280
+				} else {
+					reqW, reqH = 1280, 720
+				}
+			case isLand:
+				reqW, reqH = 1920, 1080
+			case isPort:
+				reqW, reqH = 832, 1216
+			}
+		}
 		payload, _ := json.Marshal(map[string]any{
 			"prompt":               imgPrompt,
 			"style":                strArg("style", "general"),
 			"negative_prompt":      imgNeg,
-			"width":                intArg("width", 1024),
-			"height":               intArg("height", 1024),
-			"steps":                intArg("steps", 28),
+			"width":                reqW,
+			"height":               reqH,
+			"steps":                stepsVal,
 			"seed":                 seedVal,
 			"reference_image_path": resolvedRef,
 			"denoise":              den,
 			"output_path":          filepath.Join(cwd, fmt.Sprintf("web_gen_%d.png", time.Now().UnixMilli())),
 		})
 		pyCode := `import json, sys; sys.path.insert(0, '/home/rizal/Documents/ollama/image-mcp'); import server; a=json.loads(sys.argv[1]); print(server.generate_image(**a))`
-		tctx, cancel := context.WithTimeout(ctx, 360*time.Second)
+		tctx, cancel := context.WithTimeout(ctx, 600*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(tctx, "/home/rizal/Documents/ollama/comfyui/.venv/bin/python", "-c", pyCode, string(payload))
 		cmd.Dir = cwd
@@ -1109,13 +1158,32 @@ func streamOneOllamaTurn(
 		if sm := regexp.MustCompile(`(?i)steps?\s*[:=]?\s*(\d+)`).FindStringSubmatch(lastUserPrompt); len(sm) == 2 {
 			fmt.Sscanf(sm[1], "%d", &stepsVal)
 		}
+		if stepsVal < 10 {
+			stepsVal = 10
+		} else if stepsVal > 60 {
+			stepsVal = 60
+		}
+		wVal, hVal := 832, 1216
+		lowLP := strings.ToLower(lastUserPrompt)
+		switch {
+		case strings.Contains(lowLP, "2160p") || strings.Contains(lowLP, "4k"):
+			wVal, hVal = 3840, 2160
+		case strings.Contains(lowLP, "1440p") || strings.Contains(lowLP, "2k"):
+			wVal, hVal = 2560, 1440
+		case strings.Contains(lowLP, "1080p") || strings.Contains(lowLP, "full hd"):
+			wVal, hVal = 1920, 1080
+		case strings.Contains(lowLP, "720p"):
+			wVal, hVal = 1280, 720
+		case strings.Contains(lowLP, "landscape") || strings.Contains(lowLP, "16:9"):
+			wVal, hVal = 1920, 1080
+		}
 		var tc OllamaToolCall
 		tc.Function.Name = "generate_image"
 		tc.Function.Arguments = map[string]any{
 			"prompt":               finalPrompt,
 			"style":                "illustration",
-			"width":                832,
-			"height":               1216,
+			"width":                wVal,
+			"height":               hVal,
 			"steps":                stepsVal,
 			"reference_image_path": "none",
 		}
@@ -1400,7 +1468,7 @@ func executeChatLoopWithAgent(ctx context.Context, model, cwd string, enableExec
 			sysParts = append(sysParts, "Terminal & File tools (`bash`, `list_files`, `find_files`, `grep_search`, `read_file`, `edit_file`, `write_file`) are enabled. Use them when the user asks to explore the workspace, search code, run commands, or generate/edit code files.")
 		}
 		if enableMCP {
-			sysParts = append(sysParts, "MCP media tools (`generate_image`, `generate_video`) are connected via `local-image-gen` (ComfyUI). CRITICAL RULE: When the user asks to create, make, fix, or regenerate an image/picture/photo, you MUST invoke the `generate_image` tool call FIRST. NEVER pretend to generate an image by writing a fake `File Path: /home/rizal/Documents/chat/web_gen_...` or `Technical Breakdown` table in plain text without calling `generate_image`. Only pass `reference_image_path=\"auto\"` if the user attached an image in the CURRENT message (or pass an explicit file path only when editing that specific file); for a new image or regenerating from the same prompt, set `reference_image_path=\"none\"` so it runs fresh txt2img with a new random seed. For img2img: use `denoise` 0.15-0.30 for subtle 1:1 face/hand fixes in the same style, and 0.58-0.68 for style transfer (e.g. photo to Ghibli/anime with `style=\"illustration\"`) or outfit/scene edits. After `generate_image` finishes, keep your explanation brief (1-3 sentences) instead of writing a new PRD.")
+			sysParts = append(sysParts, "MCP media tools (`generate_image`, `generate_video`) are connected via `local-image-gen` (ComfyUI). CRITICAL RULE: When the user asks to create, make, fix, or regenerate an image/picture/photo, you MUST invoke the `generate_image` tool call FIRST. NEVER pretend to generate an image by writing a fake `File Path: /home/rizal/Documents/chat/web_gen_...` or `Technical Breakdown` table in plain text without calling `generate_image`. Only pass `reference_image_path=\"auto\"` if the user attached an image in the CURRENT message (or pass an explicit file path only when editing that specific file); for a new image or regenerating from the same prompt, set `reference_image_path=\"none\"` so it runs fresh txt2img with a new random seed. Support aspect ratios and resolutions: when user asks for landscape/16:9/720p/1080p/1440p/2160p/4K, pass `width` & `height` (`1280x720`, `1920x1080`, `2560x1440`, or `3840x2160`). `steps` supports 10-60 (up to 60). For img2img: keep `denoise` strictly within `0.00`-`0.20` (max `0.20`) to preserve quality. After `generate_image` finishes, keep your explanation brief (1-3 sentences) instead of writing a new PRD.")
 		}
 		sysParts = append(sysParts, choiceHint)
 		msgs = append(msgs, ChatMessage{Role: "system", Content: strings.Join(sysParts, "\n\n")})

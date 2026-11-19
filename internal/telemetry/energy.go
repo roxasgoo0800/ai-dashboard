@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultTariffIDRPerKWh = 1444.70 // PLN R-1/TR 1.300VA - 2.200VA
-	defaultSystemBaseWatts = 55.0    // CPU + Motherboard + RAM + NVMe + Fans baseline
+	defaultSystemBaseWatts = 65.0    // CPU + Motherboard + RAM + NVMe + Fans + PSU overhead baseline
 	defaultVoltageV        = 220.0   // Standard Indonesia PLN AC Voltage
 )
 
