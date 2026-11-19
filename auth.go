@@ -1057,6 +1057,7 @@ func handleAuthChangePassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"Invalid CSRF token"}`, http.StatusForbidden)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16384)
 	var body struct {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`

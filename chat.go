@@ -1864,6 +1864,7 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 25*1024*1024)
 	var req ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -1876,25 +1877,91 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleChatMedia(w http.ResponseWriter, r *http.Request) {
-	p := filepath.Clean(r.URL.Query().Get("path"))
-	if !strings.HasPrefix(p, "/home/rizal/Documents/") && !strings.HasPrefix(p, "/tmp/") {
+var allowedServeRoots = []string{
+	"/home/rizal/Documents/",
+	"/tmp/",
+}
+
+func isSensitivePath(cleanPath string) bool {
+	base := strings.ToLower(filepath.Base(cleanPath))
+	if base == "auth_config.json" || base == "initial_credentials.txt" || base == ".git-credentials" {
+		return true
+	}
+	for _, seg := range strings.Split(filepath.ToSlash(cleanPath), "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			continue
+		}
+		if strings.HasPrefix(seg, ".") {
+			return true
+		}
+	}
+	return false
+}
+
+func safeServeAllowedPath(w http.ResponseWriter, r *http.Request, rawPath string, mediaOnly bool, allowInline bool) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	clean := filepath.Clean(strings.TrimSpace(rawPath))
+	if clean == "" || clean == "." || !filepath.IsAbs(clean) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	http.ServeFile(w, r, p)
+	realPath, err := filepath.EvalSymlinks(clean)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	realPath = filepath.Clean(realPath)
+	allowed := false
+	for _, root := range allowedServeRoots {
+		realRoot, rerr := filepath.EvalSymlinks(strings.TrimSuffix(root, "/"))
+		if rerr == nil {
+			root = filepath.Clean(realRoot) + "/"
+		}
+		if strings.HasPrefix(realPath, root) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed || isSensitivePath(realPath) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	info, err := os.Stat(realPath)
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	if mediaOnly {
+		ext := strings.ToLower(filepath.Ext(realPath))
+		switch ext {
+		case ".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm":
+		default:
+			http.Error(w, "Forbidden media type", http.StatusForbidden)
+			return
+		}
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if allowInline && r.URL.Query().Get("inline") == "1" {
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	} else if !mediaOnly {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(realPath)))
+	}
+	http.ServeFile(w, r, realPath)
+}
+
+func handleChatMedia(w http.ResponseWriter, r *http.Request) {
+	safeServeAllowedPath(w, r, r.URL.Query().Get("path"), true, true)
 }
 
 func handleChatDownload(w http.ResponseWriter, r *http.Request) {
-	p := filepath.Clean(r.URL.Query().Get("path"))
-	if !strings.HasPrefix(p, "/home/rizal/") && !strings.HasPrefix(p, "/tmp/") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	if r.URL.Query().Get("inline") != "1" {
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(p)))
-	}
-	http.ServeFile(w, r, p)
+	safeServeAllowedPath(w, r, r.URL.Query().Get("path"), false, true)
 }
 
 var chatStoreMu sync.Mutex
@@ -1962,8 +2029,11 @@ func saveSessionFile(s ChatSession) {
 		return
 	}
 	p := filepath.Join(getChatsDir(), s.ID+".json")
+	tmp := p + ".tmp"
 	chatStoreMu.Lock()
-	_ = os.WriteFile(p, b, 0o644)
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		_ = os.Rename(tmp, p)
+	}
 	chatStoreMu.Unlock()
 }
 
@@ -2137,6 +2207,7 @@ func handleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 25*1024*1024)
 	var req BackgroundSendRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -2862,6 +2933,7 @@ func handleChatSession(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 16384)
 		var body struct {
 			Commit string `json:"commit"`
 		}

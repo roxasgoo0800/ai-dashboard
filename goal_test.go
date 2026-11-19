@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1674,5 +1675,56 @@ func TestChatCheckpointTruncateAndDenoisePreservation(t *testing.T) {
 	}
 	if len(snap.Messages) != 4 || snap.Messages[2].Content != "msg 1 edited" || snap.Messages[3].Content != "re-executed" {
 		t.Fatalf("unexpected truncated messages after checkpoint retry: %+v", snap.Messages)
+	}
+}
+
+func TestSecurityPathTraversalAndSecretsBlocked(t *testing.T) {
+	// 1. Sensitive dotfiles & auth configs must be blocked on download & media
+	for _, blockedPath := range []string{
+		"/home/rizal/.git-credentials",
+		"/home/rizal/.ssh/id_rsa",
+		"/home/rizal/Documents/ollama/ai-dashboard/auth_config.json",
+		"/home/rizal/Documents/ollama/ai-dashboard/.git/config",
+		"/etc/passwd",
+		"/tmp/../etc/passwd",
+	} {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/chat-download?path="+url.QueryEscape(blockedPath), nil)
+		handleChatDownload(rr, req)
+		if rr.Code != http.StatusForbidden && rr.Code != http.StatusNotFound {
+			t.Fatalf("expected 403/404 for sensitive path %q, got %d", blockedPath, rr.Code)
+		}
+	}
+
+	// 2. Symlink escape from /tmp -> /etc/passwd must be blocked by EvalSymlinks
+	tmpDir := t.TempDir()
+	symEscape := filepath.Join(tmpDir, "escape.txt")
+	if err := os.Symlink("/etc/passwd", symEscape); err == nil {
+		rr := httptest.NewRecorder()
+		handleChatDownload(rr, httptest.NewRequest(http.MethodGet, "/api/chat-download?path="+url.QueryEscape(symEscape), nil))
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for symlink escape %q, got %d", symEscape, rr.Code)
+		}
+	}
+
+	// 3. /api/chat-media must reject non-media files (e.g. .txt/.go)
+	txtFile := filepath.Join(tmpDir, "notes.txt")
+	_ = os.WriteFile(txtFile, []byte("hello"), 0o644)
+	rrTxt := httptest.NewRecorder()
+	handleChatMedia(rrTxt, httptest.NewRequest(http.MethodGet, "/api/chat-media?path="+url.QueryEscape(txtFile), nil))
+	if rrTxt.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-media file on /api/chat-media, got %d", rrTxt.Code)
+	}
+
+	// 4. Valid PNG in /tmp serves 200 with nosniff
+	pngFile := filepath.Join(tmpDir, "ok.png")
+	_ = os.WriteFile(pngFile, []byte("\x89PNG\r\n\x1a\n"), 0o644)
+	rrPng := httptest.NewRecorder()
+	handleChatMedia(rrPng, httptest.NewRequest(http.MethodGet, "/api/chat-media?path="+url.QueryEscape(pngFile), nil))
+	if rrPng.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid png in /tmp, got %d", rrPng.Code)
+	}
+	if rrPng.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("expected X-Content-Type-Options: nosniff on served media")
 	}
 }
