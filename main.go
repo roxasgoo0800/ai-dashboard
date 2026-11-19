@@ -1948,30 +1948,34 @@ const indexHTML = `<!DOCTYPE html>
     background: var(--surface-2); border: 1px solid var(--border);
   }
 
-  /* Precision Shimmer & Waveform Equalizer */
+  /* 32-Bit RPG Stepped Pixel Shimmer, Mana-Block Loader & Cursor */
   .shimmer-txt {
     background: linear-gradient(90deg, var(--shimmer-a) 0%, var(--shimmer-b) 48%, var(--shimmer-a) 100%);
     background-size: 200% 100%;
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-    animation: txtSweep 2s linear infinite; font-weight: 500;
+    animation: txtSweep 1.8s steps(12, end) infinite; font-weight: 700;
   }
   @keyframes txtSweep { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-  .eq-bars { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 13px; margin-right: 7px; }
-  .eq-bars i {
-    display: inline-block; width: 2.5px; height: 12px; border-radius: 999px; background: var(--blue);
-    transform-origin: bottom center; will-change: transform, opacity;
-    animation: eqPulse 0.95s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  .eq-bars {
+    display: inline-flex; align-items: center; gap: 3px; height: 12px; margin-right: 7px; vertical-align: middle;
   }
-  .eq-bars i:nth-child(1) { animation-delay: 0s; }
-  .eq-bars i:nth-child(2) { animation-delay: -0.32s; }
-  .eq-bars i:nth-child(3) { animation-delay: -0.64s; }
-  @keyframes eqPulse {
-    0%, 100% { transform: scaleY(0.28); opacity: 0.45; }
-    50% { transform: scaleY(1); opacity: 1; }
+  .eq-bars i {
+    display: inline-block; width: 4px; height: 4px; border-radius: 0;
+    background: var(--btn-navy-bg); border: 1px solid rgba(28, 20, 18, 0.35);
+    box-shadow: 0 1px 0 var(--rpg-lip);
+    animation: rpgPxPulse 0.9s steps(2, end) infinite;
+  }
+  .eq-bars i:nth-child(1) { background: #1b3b6f; animation-delay: 0s; }
+  .eq-bars i:nth-child(2) { background: #c24914; animation-delay: 0.22s; }
+  .eq-bars i:nth-child(3) { background: #f7c547; animation-delay: 0.44s; }
+  @keyframes rpgPxPulse {
+    0%, 100% { transform: translateY(1px); opacity: 0.45; }
+    50% { transform: translateY(-2px); opacity: 1; }
   }
   .stream-cursor {
-    display: inline-block; width: 7px; height: 14px; background: var(--blue); border-radius: 2px;
-    vertical-align: -2px; margin-left: 3px; animation: curBlink 0.9s steps(2, start) infinite;
+    display: inline-block; width: 8px; height: 14px; background: var(--btn-orange-bg); border-radius: 0;
+    border: 1px solid var(--btn-orange-border);
+    vertical-align: -2px; margin-left: 3px; animation: curBlink 0.75s steps(2, start) infinite;
   }
   @keyframes curBlink { to { opacity: 0.15; } }
 
@@ -2020,12 +2024,17 @@ const indexHTML = `<!DOCTYPE html>
     box-shadow: inset 0 1px 0 var(--rpg-shine), 0 2px 0 var(--rpg-lip);
   }
   .think-box.open { display: block; width: 100%; }
-  .think-box.active-think { border-color: rgba(59,130,246,0.42); box-shadow: 0 4px 16px rgba(59,130,246,0.1); }
-  .think-box.active-think::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--blue), var(--violet), transparent);
-    background-size: 200% 100%; animation: txtSweep 2s linear infinite;
+  .think-box.active-think {
+    border-color: var(--btn-orange-border);
+    background: linear-gradient(180deg, rgba(194,73,20,0.1), var(--think-bg) 70%);
+    box-shadow: inset 0 1px 0 var(--rpg-shine), 0 3px 0 var(--rpg-lip);
   }
+  .think-box.active-think::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: repeating-linear-gradient(90deg, var(--btn-orange-bg) 0 10px, #f7c547 10px 20px, var(--btn-navy-bg) 20px 30px);
+    background-size: 60px 100%; animation: rpgThinkStrip 1.1s steps(6, end) infinite;
+  }
+  @keyframes rpgThinkStrip { 0% { background-position: 0 0; } 100% { background-position: 60px 0; } }
   .think-head {
     padding: 6px 12px; font-size: 0.74rem; color: var(--text-2); cursor: pointer;
     display: flex; justify-content: space-between; align-items: center; gap: 12px; user-select: none;
@@ -7091,7 +7100,7 @@ function syncAIMessageDOM(row, msgData, isRunningLast, msgIdx, isLatestOverall) 
     thinkBox.classList.toggle('active-think', isActivelyThinking);
     if (row._wasActivelyThinking !== isActivelyThinking) {
       thinkLabelEl.innerHTML = isActivelyThinking
-        ? (eqHtml + '<span class="shimmer-txt">Sedang menganalisa (Arcane Reasoning)...</span>')
+        ? ('<span style="display:inline-flex;align-items:center;gap:6px;">' + rpgEventIconSvg('think', 14) + eqHtml + '<span class="shimmer-txt">Sedang menganalisa (Arcane Reasoning)...</span></span>')
         : ('<span style="display:inline-flex;align-items:center;gap:6px;color:var(--text-2);">' + rpgEventIconSvg('think', 14) + '<span>Arcane Reasoning Log</span></span>');
       row._wasActivelyThinking = isActivelyThinking;
     }
