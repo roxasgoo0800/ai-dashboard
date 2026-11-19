@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -904,12 +905,21 @@ func HandleAuthGoogle(w http.ResponseWriter, r *http.Request) {
 		authMgr.recordLoginFailure(ipSprayKey, 20)
 		w.WriteHeader(http.StatusUnauthorized)
 		if errors.Is(err, errGoogleEmailDenied) {
-			fmt.Printf("[AUTH] Google login ditolak (bukan whitelist): %q ip=%s\n", email, srcIP)
+			log.Printf("[AUTH] Google login ditolak (bukan whitelist): %q ip=%s", email, srcIP)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "Email Google tidak terdaftar atau tidak diizinkan mengakses dashboard ini."})
 			return
 		}
-		fmt.Printf("[AUTH] Google login gagal (%v) ip=%s\n", err, srcIP)
-		_ = json.NewEncoder(w).Encode(map[string]any{"error": "Token Google tidak valid atau kedaluwarsa."})
+		log.Printf("[AUTH] Google login gagal (%v) ip=%s", err, srcIP)
+		msg := "Token Google tidak valid atau kedaluwarsa (" + err.Error() + "). Silakan muat ulang halaman dan login ulang dengan Google."
+		switch {
+		case strings.Contains(err.Error(), "expired"):
+			msg = "Token Google sudah kedaluwarsa. Halaman login menyimpan sesi Google lama — silakan klik tombol Sign in with Google lagi."
+		case strings.Contains(err.Error(), "audience"):
+			msg = "Google Client ID tidak cocok (invalid audience). Periksa konfigurasi GOOGLE_CLIENT_ID."
+		case strings.Contains(err.Error(), "jwks") || strings.Contains(err.Error(), "kid"):
+			msg = "Gagal memverifikasi kunci publik Google (" + err.Error() + "). Coba beberapa detik lagi."
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": msg})
 		return
 	}
 
