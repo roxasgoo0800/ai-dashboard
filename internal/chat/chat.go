@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"archive/zip"
@@ -1855,7 +1855,7 @@ func executeGoalLoopWithAgent(ctx context.Context, chatID, model, cwd string, en
 	emitDoneStats(reqStart, totalEvalCount, totalEvalNs, emit)
 }
 
-func handleChat(w http.ResponseWriter, r *http.Request) {
+func HandleChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1957,11 +1957,11 @@ func safeServeAllowedPath(w http.ResponseWriter, r *http.Request, rawPath string
 	http.ServeFile(w, r, realPath)
 }
 
-func handleChatMedia(w http.ResponseWriter, r *http.Request) {
+func HandleChatMedia(w http.ResponseWriter, r *http.Request) {
 	safeServeAllowedPath(w, r, r.URL.Query().Get("path"), true, true)
 }
 
-func handleChatDownload(w http.ResponseWriter, r *http.Request) {
+func HandleChatDownload(w http.ResponseWriter, r *http.Request) {
 	safeServeAllowedPath(w, r, r.URL.Query().Get("path"), false, true)
 }
 
@@ -2946,7 +2946,7 @@ func handleChatSend(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": id, "cwd": resolvedCwd, "goal_mode": req.GoalMode, "agent": parsedGoal.Agent})
 }
 
-func handleChatsCollection(w http.ResponseWriter, r *http.Request) {
+func HandleChatsCollection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	dir := getChatsDir()
@@ -3039,7 +3039,7 @@ func handleChatsCollection(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleChatSession(w http.ResponseWriter, r *http.Request) {
+func HandleChatSession(w http.ResponseWriter, r *http.Request) {
 	rel := strings.TrimPrefix(r.URL.Path, "/api/chats/")
 	if rel == "send" {
 		handleChatSend(w, r)
@@ -3296,7 +3296,7 @@ func handleChatSession(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleMCPStatus(w http.ResponseWriter, r *http.Request) {
+func HandleMCPStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	serverPath := "/home/rizal/Documents/ollama/image-mcp/server.py"

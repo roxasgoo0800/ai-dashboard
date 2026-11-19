@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"crypto"
@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	authCookieName        = "ai_jwt"
+	AuthCookieName        = "ai_jwt"
 	csrfCookieName        = "ai_csrf"
 	pbkdf2Iterations      = 100000
 	jwtTTL                = 12 * time.Hour
@@ -185,7 +185,7 @@ func normalizeEmail(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
-func initAuthManager(opts AuthOptions) error {
+func InitAuthManager(opts AuthOptions) error {
 	base := appBaseDir()
 	_ = os.MkdirAll(base, 0o755)
 	m := &AuthManager{
@@ -349,7 +349,7 @@ func (m *AuthManager) signJWT(claims JWTClaims) (string, error) {
 	return signingInput + "." + sig, nil
 }
 
-func (m *AuthManager) verifyJWT(token string) (*JWTClaims, error) {
+func (m *AuthManager) VerifyJWT(token string) (*JWTClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, errors.New("invalid jwt format")
@@ -468,18 +468,18 @@ func (m *AuthManager) clearLoginFailure(key string) {
 	m.failMu.Unlock()
 }
 
-func extractTokenFromRequest(r *http.Request) string {
+func ExtractTokenFromRequest(r *http.Request) string {
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
 	if strings.HasPrefix(strings.ToLower(authz), "bearer ") {
 		return strings.TrimSpace(authz[7:])
 	}
-	if c, err := r.Cookie(authCookieName); err == nil && c.Value != "" {
+	if c, err := r.Cookie(AuthCookieName); err == nil && c.Value != "" {
 		return c.Value
 	}
 	return ""
 }
 
-func applySecurityHeaders(w http.ResponseWriter, r *http.Request) {
+func ApplySecurityHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Referrer-Policy", "same-origin")
@@ -534,9 +534,9 @@ func checkSameOriginOrCORS(r *http.Request) bool {
 	return true
 }
 
-func withSecurity(next http.HandlerFunc) http.HandlerFunc {
+func WithSecurity(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		applySecurityHeaders(w, r)
+		ApplySecurityHeaders(w, r)
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -545,13 +545,13 @@ func withSecurity(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func withAuth(next http.HandlerFunc) http.HandlerFunc {
-	return withSecurity(func(w http.ResponseWriter, r *http.Request) {
+func WithAuth(next http.HandlerFunc) http.HandlerFunc {
+	return WithSecurity(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasSuffix(r.URL.Path, "/stream") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
-		tok := extractTokenFromRequest(r)
-		claims, err := authMgr.verifyJWT(tok)
+		tok := ExtractTokenFromRequest(r)
+		claims, err := authMgr.VerifyJWT(tok)
 		if err != nil {
 			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
 			return
@@ -595,7 +595,7 @@ func setAuthCookies(w http.ResponseWriter, r *http.Request, jwtStr, csrfStr stri
 	maxAge := int(jwtTTL.Seconds())
 	sec := isHTTPS(r)
 	http.SetCookie(w, &http.Cookie{
-		Name:     authCookieName,
+		Name:     AuthCookieName,
 		Value:    jwtStr,
 		Path:     "/",
 		MaxAge:   maxAge,
@@ -614,10 +614,10 @@ func setAuthCookies(w http.ResponseWriter, r *http.Request, jwtStr, csrfStr stri
 	})
 }
 
-func clearAuthCookies(w http.ResponseWriter, r *http.Request) {
+func ClearAuthCookies(w http.ResponseWriter, r *http.Request) {
 	sec := isHTTPS(r)
 	http.SetCookie(w, &http.Cookie{
-		Name:     authCookieName,
+		Name:     AuthCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -667,7 +667,7 @@ func issueSession(w http.ResponseWriter, r *http.Request, sub, role, authType st
 	})
 }
 
-func handleAuthProviders(w http.ResponseWriter, r *http.Request) {
+func HandleAuthProviders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -864,7 +864,7 @@ func (m *AuthManager) verifyGoogleIDToken(idToken string) (string, error) {
 	return email, nil
 }
 
-func handleAuthGoogle(w http.ResponseWriter, r *http.Request) {
+func HandleAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
@@ -919,7 +919,7 @@ func handleAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	issueSession(w, r, email, "admin", "google")
 }
 
-func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+func HandleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
@@ -981,11 +981,11 @@ func handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	issueSession(w, r, rec.Username, rec.Role, "password")
 }
 
-func handleAuthMe(w http.ResponseWriter, r *http.Request) {
+func HandleAuthMe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	tok := extractTokenFromRequest(r)
-	claims, err := authMgr.verifyJWT(tok)
+	tok := ExtractTokenFromRequest(r)
+	claims, err := authMgr.VerifyJWT(tok)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -1009,15 +1009,15 @@ func handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+func HandleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	tok := extractTokenFromRequest(r)
-	if claims, err := authMgr.verifyJWT(tok); err == nil {
+	tok := ExtractTokenFromRequest(r)
+	if claims, err := authMgr.VerifyJWT(tok); err == nil {
 		if !authMgr.verifyCSRF(claims, r.Header.Get("X-CSRF-Token")) {
 			http.Error(w, `{"error":"Invalid CSRF token"}`, http.StatusForbidden)
 			return
@@ -1032,19 +1032,19 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		}
 		authMgr.mu.Unlock()
 	}
-	clearAuthCookies(w, r)
+	ClearAuthCookies(w, r)
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
-func handleAuthChangePassword(w http.ResponseWriter, r *http.Request) {
+func HandleAuthChangePassword(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	tok := extractTokenFromRequest(r)
-	claims, err := authMgr.verifyJWT(tok)
+	tok := ExtractTokenFromRequest(r)
+	claims, err := authMgr.VerifyJWT(tok)
 	if err != nil {
 		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -1087,4 +1087,8 @@ func handleAuthChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = os.Remove(authMgr.credPath)
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
+func VerifyJWT(tok string) (*JWTClaims, error) {
+	return authMgr.VerifyJWT(tok)
 }

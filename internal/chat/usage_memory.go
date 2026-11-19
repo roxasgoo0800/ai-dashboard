@@ -1,6 +1,7 @@
-package main
+package chat
 
 import (
+	"ai-dashboard/internal/telemetry"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -495,7 +496,7 @@ func buildUsageSummary(monthStr string) UsageSummaryResponse {
 	return resp
 }
 
-func handleUsageAPI(w http.ResponseWriter, r *http.Request) {
+func HandleUsageAPI(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -534,13 +535,13 @@ type MemoryFlushLogEntry struct {
 }
 
 type MemoryStatusResponse struct {
-	RAM          RAMMetrics            `json:"ram"`
-	GPU          GPUMetrics            `json:"gpu"`
-	OllamaModels []OllamaModelInfo     `json:"ollama_models"`
-	Comfy        ComfyMetrics          `json:"comfy"`
+	RAM          telemetry.RAMMetrics            `json:"ram"`
+	GPU          telemetry.GPUMetrics            `json:"gpu"`
+	OllamaModels []telemetry.OllamaModelInfo     `json:"ollama_models"`
+	Comfy        telemetry.ComfyMetrics          `json:"comfy"`
 	Runtime      GoRuntimeMemInfo      `json:"runtime"`
 	ChatStore    ChatStoreMemInfo      `json:"chat_store"`
-	TopProcs     []ProcessMemInfo      `json:"top_procs"`
+	TopProcs     []telemetry.ProcessMemInfo      `json:"top_procs"`
 	RecentFlush  []MemoryFlushLogEntry `json:"recent_flush"`
 }
 
@@ -606,9 +607,9 @@ func readChatStoreMem() ChatStoreMemInfo {
 }
 
 func collectMemoryStatus() MemoryStatusResponse {
-	snap := getLatestSnapshot()
-	ram := readRAMMetrics()
-	gpu := readGPUMetrics()
+	snap := telemetry.GetLatestSnapshot()
+	ram := telemetry.ReadRAMMetrics()
+	gpu := telemetry.ReadGPUMetrics()
 	if !gpu.Online && snap.GPU.Online {
 		gpu = snap.GPU
 	}
@@ -620,11 +621,11 @@ func collectMemoryStatus() MemoryStatusResponse {
 
 	models := snap.Ollama.Models
 	if models == nil {
-		models = []OllamaModelInfo{}
+		models = []telemetry.OllamaModelInfo{}
 	}
 	procs := snap.TopProcs
 	if procs == nil {
-		procs = []ProcessMemInfo{}
+		procs = []telemetry.ProcessMemInfo{}
 	}
 
 	return MemoryStatusResponse{
@@ -639,7 +640,7 @@ func collectMemoryStatus() MemoryStatusResponse {
 	}
 }
 
-func handleMemoryStatus(w http.ResponseWriter, r *http.Request) {
+func HandleMemoryStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -700,7 +701,7 @@ func flushComfyMemory() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func handleMemoryFlush(w http.ResponseWriter, r *http.Request) {
+func HandleMemoryFlush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -715,8 +716,8 @@ func handleMemoryFlush(w http.ResponseWriter, r *http.Request) {
 		target = "all_safe"
 	}
 
-	beforeRAM := readRAMMetrics()
-	beforeGPU := readGPUMetrics()
+	beforeRAM := telemetry.ReadRAMMetrics()
+	beforeGPU := telemetry.ReadGPUMetrics()
 	beforeHeap := readGoRuntimeMem()
 
 	ok := true
@@ -788,8 +789,8 @@ func handleMemoryFlush(w http.ResponseWriter, r *http.Request) {
 
 	time.Sleep(320 * time.Millisecond)
 
-	afterRAM := readRAMMetrics()
-	afterGPU := readGPUMetrics()
+	afterRAM := telemetry.ReadRAMMetrics()
+	afterGPU := telemetry.ReadGPUMetrics()
 	afterHeap := readGoRuntimeMem()
 
 	freedVRAM := math.Round(math.Max(0, beforeGPU.VRAMUsedMiB-afterGPU.VRAMUsedMiB)*10) / 10
@@ -963,7 +964,7 @@ func readTailLines(path string, maxBytes int64, maxLines int) []string {
 	return out
 }
 
-func analyzeLogLinesForMitigations(lines []RuntimeLogLine, ram RAMMetrics, gpu GPUMetrics) []MitigationAlert {
+func analyzeLogLinesForMitigations(lines []RuntimeLogLine, ram telemetry.RAMMetrics, gpu telemetry.GPUMetrics) []MitigationAlert {
 	alerts := []MitigationAlert{}
 	seenKey := map[string]bool{}
 	addOnce := func(key string, a MitigationAlert) {
@@ -1088,9 +1089,9 @@ func analyzeLogLinesForMitigations(lines []RuntimeLogLine, ram RAMMetrics, gpu G
 }
 
 func collectRuntimeLogsAndMitigations() MemoryLogsResponse {
-	snap := getLatestSnapshot()
-	ram := readRAMMetrics()
-	gpu := readGPUMetrics()
+	snap := telemetry.GetLatestSnapshot()
+	ram := telemetry.ReadRAMMetrics()
+	gpu := telemetry.ReadGPUMetrics()
 	if !gpu.Online && snap.GPU.Online {
 		gpu = snap.GPU
 	}
@@ -1266,7 +1267,7 @@ func collectRuntimeLogsAndMitigations() MemoryLogsResponse {
 	}
 
 	// Build Per-Model Health Matrix (all installed Ollama models + ComfyUI)
-	loadedMap := map[string]OllamaModelInfo{}
+	loadedMap := map[string]telemetry.OllamaModelInfo{}
 	for _, lm := range snap.Ollama.Models {
 		loadedMap[lm.Name] = lm
 	}
@@ -1347,7 +1348,7 @@ func collectRuntimeLogsAndMitigations() MemoryLogsResponse {
 	}
 }
 
-func handleMemoryLogs(w http.ResponseWriter, r *http.Request) {
+func HandleMemoryLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

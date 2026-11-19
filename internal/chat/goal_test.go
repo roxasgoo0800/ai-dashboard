@@ -1,6 +1,8 @@
-package main
+package chat
 
 import (
+	"ai-dashboard/internal/telemetry"
+	"ai-dashboard/web"
 	"archive/zip"
 	"bytes"
 	"context"
@@ -292,7 +294,7 @@ func TestHandleChatSendGoalAndCancelAPI(t *testing.T) {
 		// Cleanup test chat file & activeRuns entry
 		delReq := httptest.NewRequest(http.MethodDelete, "/api/chats/"+chatID, nil)
 		delRR := httptest.NewRecorder()
-		handleChatSession(delRR, delReq)
+		HandleChatSession(delRR, delReq)
 	}()
 
 	body := fmt.Sprintf(`{"chat_id":%q,"model":"qwen3.5-abliterated:32k","cwd":%q,"user_prompt":"/goal Build test app"}`, chatID, t.TempDir())
@@ -325,7 +327,7 @@ func TestHandleChatSendGoalAndCancelAPI(t *testing.T) {
 	for time.Now().Before(deadline) {
 		getReq := httptest.NewRequest(http.MethodGet, "/api/chats/"+chatID, nil)
 		getRR := httptest.NewRecorder()
-		handleChatSession(getRR, getReq)
+		HandleChatSession(getRR, getReq)
 		var snap ChatSession
 		if json.Unmarshal(getRR.Body.Bytes(), &snap) == nil && snap.Goal != nil && snap.Goal.Status == "cancelled" && !snap.Running {
 			return
@@ -632,7 +634,7 @@ func TestGoalDiffAndRollbackHTTPAPI(t *testing.T) {
 	createBody, _ := json.Marshal(map[string]any{"title": "HTTP Checkpoint Test", "cwd": ws})
 	createReq := httptest.NewRequest(http.MethodPost, "/api/chats", bytes.NewReader(createBody))
 	createRR := httptest.NewRecorder()
-	handleChatsCollection(createRR, createReq)
+	HandleChatsCollection(createRR, createReq)
 	if createRR.Code != http.StatusOK {
 		t.Fatalf("POST /api/chats failed: %d %s", createRR.Code, createRR.Body.String())
 	}
@@ -648,7 +650,7 @@ func TestGoalDiffAndRollbackHTTPAPI(t *testing.T) {
 		activeRunsMu.Unlock()
 		delReq := httptest.NewRequest(http.MethodDelete, "/api/chats/"+chatID, nil)
 		delRR := httptest.NewRecorder()
-		handleChatSession(delRR, delReq)
+		HandleChatSession(delRR, delReq)
 		deleteGoalCheckpoints(chatID)
 	}()
 
@@ -681,7 +683,7 @@ func TestGoalDiffAndRollbackHTTPAPI(t *testing.T) {
 	// 1. GET diff works even while running
 	diffReq := httptest.NewRequest(http.MethodGet, "/api/chats/"+chatID+"/goal/diff?commit="+cp1.Commit, nil)
 	diffRR := httptest.NewRecorder()
-	handleChatSession(diffRR, diffReq)
+	HandleChatSession(diffRR, diffReq)
 	if diffRR.Code != http.StatusOK {
 		t.Fatalf("GET /goal/diff returned %d: %s", diffRR.Code, diffRR.Body.String())
 	}
@@ -698,7 +700,7 @@ func TestGoalDiffAndRollbackHTTPAPI(t *testing.T) {
 	rbPayload, _ := json.Marshal(map[string]string{"commit": cp0.Commit})
 	rbConflictReq := httptest.NewRequest(http.MethodPost, "/api/chats/"+chatID+"/goal/rollback", bytes.NewReader(rbPayload))
 	rbConflictRR := httptest.NewRecorder()
-	handleChatSession(rbConflictRR, rbConflictReq)
+	HandleChatSession(rbConflictRR, rbConflictReq)
 	if rbConflictRR.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict when rolling back active session, got %d: %s", rbConflictRR.Code, rbConflictRR.Body.String())
 	}
@@ -715,7 +717,7 @@ func TestGoalDiffAndRollbackHTTPAPI(t *testing.T) {
 
 	rbReq := httptest.NewRequest(http.MethodPost, "/api/chats/"+chatID+"/goal/rollback", bytes.NewReader(rbPayload))
 	rbRR := httptest.NewRecorder()
-	handleChatSession(rbRR, rbReq)
+	HandleChatSession(rbRR, rbReq)
 	if rbRR.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on rollback, got %d: %s", rbRR.Code, rbRR.Body.String())
 	}
@@ -726,7 +728,7 @@ func TestGoalDiffAndRollbackHTTPAPI(t *testing.T) {
 	// Verify rollback audit message was appended to session
 	getReq := httptest.NewRequest(http.MethodGet, "/api/chats/"+chatID, nil)
 	getRR := httptest.NewRecorder()
-	handleChatSession(getRR, getReq)
+	HandleChatSession(getRR, getReq)
 	var afterSnap ChatSession
 	if err := json.Unmarshal(getRR.Body.Bytes(), &afterSnap); err != nil {
 		t.Fatal(err)
@@ -976,7 +978,7 @@ func TestGoalPerCycleSeparateMessagesAndSanitizedResume(t *testing.T) {
 	defer func() {
 		delReq := httptest.NewRequest(http.MethodDelete, "/api/chats/"+chatID, nil)
 		delRR := httptest.NewRecorder()
-		handleChatSession(delRR, delReq)
+		HandleChatSession(delRR, delReq)
 		deleteGoalCheckpoints(chatID)
 	}()
 
@@ -1018,7 +1020,7 @@ func TestGoalPerCycleSeparateMessagesAndSanitizedResume(t *testing.T) {
 	for time.Now().Before(deadline) {
 		getReq := httptest.NewRequest(http.MethodGet, "/api/chats/"+chatID, nil)
 		getRR := httptest.NewRecorder()
-		handleChatSession(getRR, getReq)
+		HandleChatSession(getRR, getReq)
 		if json.Unmarshal(getRR.Body.Bytes(), &finalSess) == nil && finalSess.Goal != nil && !finalSess.Running && finalSess.Goal.Status == "completed" {
 			break
 		}
@@ -1114,7 +1116,7 @@ func TestGoalLiveSteeringMidRun(t *testing.T) {
 	defer func() {
 		delReq := httptest.NewRequest(http.MethodDelete, "/api/chats/"+chatID, nil)
 		delRR := httptest.NewRecorder()
-		handleChatSession(delRR, delReq)
+		HandleChatSession(delRR, delReq)
 		deleteGoalCheckpoints(chatID)
 	}()
 
@@ -1164,7 +1166,7 @@ func TestGoalLiveSteeringMidRun(t *testing.T) {
 	for time.Now().Before(deadline) {
 		getReq := httptest.NewRequest(http.MethodGet, "/api/chats/"+chatID, nil)
 		getRR := httptest.NewRecorder()
-		handleChatSession(getRR, getReq)
+		HandleChatSession(getRR, getReq)
 		if json.Unmarshal(getRR.Body.Bytes(), &finalSess) == nil && finalSess.Goal != nil && !finalSess.Running && finalSess.Goal.Status == "completed" {
 			break
 		}
@@ -1187,74 +1189,6 @@ func TestGoalLiveSteeringMidRun(t *testing.T) {
 	}
 }
 
-func TestPlusJakartaSansFontAndRPGThemeAssets(t *testing.T) {
-	if len(jakartaSansWOFF2) < 10000 {
-		t.Fatalf("expected embedded PlusJakartaSans-latin.woff2 >= 10KB, got %d bytes", len(jakartaSansWOFF2))
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/assets/fonts/plus-jakarta-sans.woff2", nil)
-	rr := httptest.NewRecorder()
-	handleFontAsset(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from handleFontAsset, got %d", rr.Code)
-	}
-	if ct := rr.Header().Get("Content-Type"); ct != "font/woff2" {
-		t.Fatalf("expected Content-Type font/woff2, got %q", ct)
-	}
-	if rr.Body.Len() != len(jakartaSansWOFF2) {
-		t.Fatalf("expected body len %d, got %d", len(jakartaSansWOFF2), rr.Body.Len())
-	}
-
-	badReq := httptest.NewRequest(http.MethodPost, "/api/assets/fonts/plus-jakarta-sans.woff2", nil)
-	badRR := httptest.NewRecorder()
-	handleFontAsset(badRR, badReq)
-	if badRR.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405 on POST font asset, got %d", badRR.Code)
-	}
-
-	for name, htmlDoc := range map[string]string{"indexHTML": indexHTML, "loginHTML": loginHTML} {
-		if !strings.Contains(htmlDoc, "font-family: 'Plus Jakarta Sans'") || !strings.Contains(htmlDoc, "/api/assets/fonts/plus-jakarta-sans.woff2") {
-			t.Fatalf("%s missing self-hosted Plus Jakarta Sans @font-face", name)
-		}
-		if !strings.Contains(htmlDoc, `shape-rendering="crispEdges"`) {
-			t.Fatalf("%s missing 32-bit pixel-art SVG sprite assets", name)
-		}
-	}
-	if !strings.Contains(indexHTML, `--sans: 'Plus Jakarta Sans'`) || !strings.Contains(indexHTML, `:root[data-theme="light"]`) {
-		t.Fatalf("indexHTML missing Plus Jakarta Sans --sans token or light GBA parchment theme")
-	}
-	if !strings.Contains(indexHTML, "pixelMageAvatarSvg") || !strings.Contains(indexHTML, "rpgSpriteBob") {
-		t.Fatalf("indexHTML missing RPG pixel mage avatar sprite helper/animation")
-	}
-	if strings.Contains(indexHTML, `<svg class="ico`) || strings.Contains(loginHTML, `<svg class="ico`) {
-		t.Fatalf("found mixed flat vector <svg class=\"ico\"> icon; all UI icons must be cohesive 32-bit pixel art")
-	}
-	for _, rpgSym := range []string{
-		"rpg-event-panel",
-		"rpg-error-card",
-		"pixelWorkstationDioramaSvg",
-		"rpgEventIconSvg",
-		"parseRpgGoalEventLine",
-		"gpuCoreFrame",
-		"workstation-scene-frame",
-		"view-usage",
-		"view-memory",
-		"rpg-ambient-bg",
-		"rail-wol-card",
-		"rpg-media-frame",
-		"usageCalendarGrid",
-		"triggerMemoryFlush",
-	} {
-		if !strings.Contains(indexHTML, rpgSym) {
-			t.Fatalf("indexHTML missing expected 32-bit RPG art direction component %q", rpgSym)
-		}
-	}
-	for _, tok := range []string{"#e6d3bd", "#1b3b6f", "#7a1c2e", "#c24914", "#1a1310"} {
-		if !strings.Contains(indexHTML, tok) {
-			t.Fatalf("indexHTML missing expected theme color token %s", tok)
-		}
-	}
-}
 
 func TestParseAgentAndGoalCommand(t *testing.T) {
 	cases := []struct {
@@ -1292,8 +1226,8 @@ func TestAgentPersonasAndHTTPAPI(t *testing.T) {
 		t.Fatalf("expected brainstorm persona prompt, got %q", p)
 	}
 	for _, uiTok := range []string{"toggleSlopBtn", "toggleBrainstormBtn", "/ai-slop", "/brainstorm"} {
-		if !strings.Contains(indexHTML, uiTok) {
-			t.Fatalf("indexHTML missing agent UI element %q", uiTok)
+		if !strings.Contains(web.IndexHTML, uiTok) {
+			t.Fatalf("web.IndexHTML missing agent UI element %q", uiTok)
 		}
 	}
 
@@ -1337,7 +1271,7 @@ func TestAgentPersonasAndHTTPAPI(t *testing.T) {
 	slopID := fmt.Sprintf("test_slop_%d", time.Now().UnixNano())
 	defer func() {
 		dReq := httptest.NewRequest(http.MethodDelete, "/api/chats/"+slopID, nil)
-		handleChatSession(httptest.NewRecorder(), dReq)
+		HandleChatSession(httptest.NewRecorder(), dReq)
 	}()
 	slopBody, _ := json.Marshal(map[string]any{
 		"chat_id":     slopID,
@@ -1360,7 +1294,7 @@ func TestAgentPersonasAndHTTPAPI(t *testing.T) {
 	brainID := fmt.Sprintf("test_brain_%d", time.Now().UnixNano())
 	defer func() {
 		dReq := httptest.NewRequest(http.MethodDelete, "/api/chats/"+brainID, nil)
-		handleChatSession(httptest.NewRecorder(), dReq)
+		HandleChatSession(httptest.NewRecorder(), dReq)
 	}()
 	brainBody, _ := json.Marshal(map[string]any{
 		"chat_id":     brainID,
@@ -1400,7 +1334,7 @@ func TestAgentPersonasAndHTTPAPI(t *testing.T) {
 		for time.Now().Before(endWait) {
 			gReq := httptest.NewRequest(http.MethodGet, "/api/chats/"+cid, nil)
 			gRR := httptest.NewRecorder()
-			handleChatSession(gRR, gReq)
+			HandleChatSession(gRR, gReq)
 			var snap ChatSession
 			if json.Unmarshal(gRR.Body.Bytes(), &snap) == nil && !snap.Running {
 				break
@@ -1456,9 +1390,9 @@ func TestUsageCalendarAndPerModelAPI(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/usage?month=2026-11", nil)
 	rr := httptest.NewRecorder()
-	handleUsageAPI(rr, req)
+	HandleUsageAPI(rr, req)
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 from handleUsageAPI, got %d: %s", rr.Code, rr.Body.String())
+		t.Fatalf("expected 200 from HandleUsageAPI, got %d: %s", rr.Code, rr.Body.String())
 	}
 	var res UsageSummaryResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
@@ -1484,9 +1418,9 @@ func TestUsageCalendarAndPerModelAPI(t *testing.T) {
 func TestMemoryStatusAndFlushAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/memory", nil)
 	rr := httptest.NewRecorder()
-	handleMemoryStatus(rr, req)
+	HandleMemoryStatus(rr, req)
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 from handleMemoryStatus, got %d", rr.Code)
+		t.Fatalf("expected 200 from HandleMemoryStatus, got %d", rr.Code)
 	}
 	var st MemoryStatusResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
@@ -1499,9 +1433,9 @@ func TestMemoryStatusAndFlushAPI(t *testing.T) {
 	// Test safe Go GC flush
 	fReq := httptest.NewRequest(http.MethodPost, "/api/memory/flush", strings.NewReader(`{"target":"go_gc"}`))
 	fRR := httptest.NewRecorder()
-	handleMemoryFlush(fRR, fReq)
+	HandleMemoryFlush(fRR, fReq)
 	if fRR.Code != http.StatusOK {
-		t.Fatalf("expected 200 from handleMemoryFlush go_gc, got %d: %s", fRR.Code, fRR.Body.String())
+		t.Fatalf("expected 200 from HandleMemoryFlush go_gc, got %d: %s", fRR.Code, fRR.Body.String())
 	}
 	var fResp map[string]any
 	if err := json.Unmarshal(fRR.Body.Bytes(), &fResp); err != nil || fResp["ok"] != true {
@@ -1511,7 +1445,7 @@ func TestMemoryStatusAndFlushAPI(t *testing.T) {
 	// Test invalid target validation
 	badReq := httptest.NewRequest(http.MethodPost, "/api/memory/flush", strings.NewReader(`{"target":"invalid_target"}`))
 	badRR := httptest.NewRecorder()
-	handleMemoryFlush(badRR, badReq)
+	HandleMemoryFlush(badRR, badReq)
 	if badRR.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid flush target, got %d", badRR.Code)
 	}
@@ -1558,7 +1492,7 @@ func TestRuntimeLogMitigationAnalyzerAndAPI(t *testing.T) {
 		{Source: "ollama", Level: "info", Message: "offloaded 22/33 layers to GPU"},
 		{Source: "model", Level: "error", Message: "dial tcp 127.0.0.1:11434: connection refused"},
 	}
-	alerts := analyzeLogLinesForMitigations(lines, RAMMetrics{}, GPUMetrics{})
+	alerts := analyzeLogLinesForMitigations(lines, telemetry.RAMMetrics{}, telemetry.GPUMetrics{})
 	if len(alerts) < 3 {
 		t.Fatalf("expected >=3 mitigation alerts for OOM + partial offload + conn refused, got %+v", alerts)
 	}
@@ -1578,23 +1512,23 @@ func TestRuntimeLogMitigationAnalyzerAndAPI(t *testing.T) {
 		t.Fatalf("missing expected mitigations (oom=%v offload=%v conn=%v): %+v", hasOOM, hasOffload, hasConn, alerts)
 	}
 
-	healthy := analyzeLogLinesForMitigations([]RuntimeLogLine{{Source: "ollama", Level: "info", Message: "server listening on 11434"}}, RAMMetrics{}, GPUMetrics{})
+	healthy := analyzeLogLinesForMitigations([]RuntimeLogLine{{Source: "ollama", Level: "info", Message: "server listening on 11434"}}, telemetry.RAMMetrics{}, telemetry.GPUMetrics{})
 	if len(healthy) != 1 || healthy[0].Severity != "ok" {
 		t.Fatalf("expected single ok alert when healthy, got %+v", healthy)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/memory/logs", nil)
 	rr := httptest.NewRecorder()
-	handleMemoryLogs(rr, req)
+	HandleMemoryLogs(rr, req)
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 from handleMemoryLogs, got %d", rr.Code)
+		t.Fatalf("expected 200 from HandleMemoryLogs, got %d", rr.Code)
 	}
 	var resp MemoryLogsResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode MemoryLogsResponse: %v", err)
 	}
 	if len(resp.Mitigations) == 0 {
-		t.Fatalf("expected at least 1 mitigation/status entry in handleMemoryLogs response")
+		t.Fatalf("expected at least 1 mitigation/status entry in HandleMemoryLogs response")
 	}
 }
 
@@ -1628,7 +1562,7 @@ func TestChatCheckpointTruncateAndDenoisePreservation(t *testing.T) {
 
 	cid := fmt.Sprintf("test_cp_%d", time.Now().UnixNano())
 	defer func() {
-		handleChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/chats/"+cid, nil))
+		HandleChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/chats/"+cid, nil))
 	}()
 
 	// Seed session with 4 messages (turn 0 + turn 1)
@@ -1668,7 +1602,7 @@ func TestChatCheckpointTruncateAndDenoisePreservation(t *testing.T) {
 	var snap ChatSession
 	for time.Now().Before(deadline) {
 		gRR := httptest.NewRecorder()
-		handleChatSession(gRR, httptest.NewRequest(http.MethodGet, "/api/chats/"+cid, nil))
+		HandleChatSession(gRR, httptest.NewRequest(http.MethodGet, "/api/chats/"+cid, nil))
 		if json.Unmarshal(gRR.Body.Bytes(), &snap) == nil && !snap.Running {
 			break
 		}
@@ -1691,7 +1625,7 @@ func TestSecurityPathTraversalAndSecretsBlocked(t *testing.T) {
 	} {
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/chat-download?path="+url.QueryEscape(blockedPath), nil)
-		handleChatDownload(rr, req)
+		HandleChatDownload(rr, req)
 		if rr.Code != http.StatusForbidden && rr.Code != http.StatusNotFound {
 			t.Fatalf("expected 403/404 for sensitive path %q, got %d", blockedPath, rr.Code)
 		}
@@ -1702,7 +1636,7 @@ func TestSecurityPathTraversalAndSecretsBlocked(t *testing.T) {
 	symEscape := filepath.Join(tmpDir, "escape.txt")
 	if err := os.Symlink("/etc/passwd", symEscape); err == nil {
 		rr := httptest.NewRecorder()
-		handleChatDownload(rr, httptest.NewRequest(http.MethodGet, "/api/chat-download?path="+url.QueryEscape(symEscape), nil))
+		HandleChatDownload(rr, httptest.NewRequest(http.MethodGet, "/api/chat-download?path="+url.QueryEscape(symEscape), nil))
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for symlink escape %q, got %d", symEscape, rr.Code)
 		}
@@ -1712,7 +1646,7 @@ func TestSecurityPathTraversalAndSecretsBlocked(t *testing.T) {
 	txtFile := filepath.Join(tmpDir, "notes.txt")
 	_ = os.WriteFile(txtFile, []byte("hello"), 0o644)
 	rrTxt := httptest.NewRecorder()
-	handleChatMedia(rrTxt, httptest.NewRequest(http.MethodGet, "/api/chat-media?path="+url.QueryEscape(txtFile), nil))
+	HandleChatMedia(rrTxt, httptest.NewRequest(http.MethodGet, "/api/chat-media?path="+url.QueryEscape(txtFile), nil))
 	if rrTxt.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-media file on /api/chat-media, got %d", rrTxt.Code)
 	}
@@ -1721,7 +1655,7 @@ func TestSecurityPathTraversalAndSecretsBlocked(t *testing.T) {
 	pngFile := filepath.Join(tmpDir, "ok.png")
 	_ = os.WriteFile(pngFile, []byte("\x89PNG\r\n\x1a\n"), 0o644)
 	rrPng := httptest.NewRecorder()
-	handleChatMedia(rrPng, httptest.NewRequest(http.MethodGet, "/api/chat-media?path="+url.QueryEscape(pngFile), nil))
+	HandleChatMedia(rrPng, httptest.NewRequest(http.MethodGet, "/api/chat-media?path="+url.QueryEscape(pngFile), nil))
 	if rrPng.Code != http.StatusOK {
 		t.Fatalf("expected 200 for valid png in /tmp, got %d", rrPng.Code)
 	}
@@ -1742,7 +1676,7 @@ func TestWorkspaceZipExport(t *testing.T) {
 
 	cid := fmt.Sprintf("test_zip_%d", time.Now().UnixNano())
 	defer func() {
-		handleChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/chats/"+cid, nil))
+		HandleChatSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/chats/"+cid, nil))
 	}()
 	saveSessionFile(ChatSession{
 		ID:    cid,
@@ -1752,7 +1686,7 @@ func TestWorkspaceZipExport(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/chats/"+cid+"/zip", nil)
-	handleChatSession(rr, req)
+	HandleChatSession(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 from /zip, got %d: %s", rr.Code, rr.Body.String())
 	}

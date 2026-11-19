@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign In &bull; AI Control Plane RPG</title>
+<style>
+  @font-face {
+    font-family: 'Plus Jakarta Sans';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('/api/assets/fonts/plus-jakarta-sans.woff2') format('woff2');
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; min-height: 100%; background: #1a1310; color: #f7ecdd;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    width: 100%; max-width: 400px;
+    background: linear-gradient(180deg, #2a201b, #1d1512);
+    border: 2px solid #8a6854; border-radius: 8px; padding: 28px 24px 24px;
+    box-shadow: inset 0 2px 0 rgba(255,240,220,0.12), 0 6px 0 rgba(8,5,3,0.68), 0 24px 60px rgba(0,0,0,0.65);
+  }
+  .shield {
+    width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 8px;
+    background: linear-gradient(180deg, #1b3b6f, #13294d);
+    border: 2px solid #c24914; display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 3px 0 rgba(8,5,3,0.6);
+  }
+  h1 { margin: 0 0 6px; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; text-align: center; }
+  .sub { margin: 0 0 18px; font-size: 0.8rem; color: #94a3b8; line-height: 1.45; text-align: center; }
+  .err {
+    display: none; margin: 0 0 14px; padding: 9px 11px; border-radius: 9px; font-size: 0.77rem; line-height: 1.4;
+    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.38); color: #fca5a5; text-align: center;
+  }
+  .err.show { display: block; }
+  .status { display: none; margin: 0 0 12px; font-size: 0.78rem; color: #93c5fd; text-align: center; }
+  .status.show { display: block; }
+  .gsi-wrap { min-height: 44px; display: flex; justify-content: center; align-items: center; margin: 8px 0 6px; }
+  .gsi-hint { margin: 10px 0 0; font-size: 0.72rem; color: #64748b; text-align: center; line-height: 1.45; }
+  .fallback { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; display: none; }
+  .fallback.visible { display: block; }
+  .fallback summary { cursor: pointer; font-size: 0.74rem; color: #94a3b8; user-select: none; text-align: center; }
+  .field { margin-top: 10px; margin-bottom: 10px; }
+  label { display: block; font-size: 0.72rem; font-weight: 600; color: #94a3b8; margin-bottom: 5px; }
+  input {
+    width: 100%; background: #140e0c; color: #f7ecdd;
+    border: 2px solid #61483b; border-radius: 7px; padding: 10px 12px;
+    font-size: 0.85rem; outline: none; font-family: inherit;
+  }
+  input:focus { border-color: #c24914; }
+  button {
+    width: 100%; margin-top: 6px; border: 2px solid #3d68b0; border-radius: 7px; padding: 10px 14px; cursor: pointer;
+    font-weight: 700; font-size: 0.85rem; color: #f7ecdd; font-family: inherit;
+    background: #1b3b6f; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 3px 0 rgba(8,5,3,0.6);
+  }
+  button:hover { background: #244c8f; border-color: #c24914; }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGSIScriptReady()"></script>
+</head>
+<body>
+  <div class="card">
+    <div class="shield">
+      <svg width="26" height="26" viewBox="0 0 16 16" shape-rendering="crispEdges">
+        <rect x="3" y="2" width="10" height="8" fill="#f7c547"/><rect x="4" y="3" width="8" height="6" fill="#2563eb"/>
+        <rect x="4" y="10" width="8" height="2" fill="#f7c547"/><rect x="5" y="10" width="6" height="2" fill="#1d4ed8"/>
+        <rect x="6" y="12" width="4" height="2" fill="#f7c547"/><rect x="7" y="14" width="2" height="1" fill="#b45309"/>
+        <rect x="7" y="4" width="2" height="5" fill="#67e8f9"/><rect x="5" y="5" width="6" height="2" fill="#67e8f9"/>
+      </svg>
+    </div>
+    <h1>Autentikasi Diperlukan</h1>
+    <p class="sub">Masuk menggunakan akun Google terdaftar untuk melanjutkan.</p>
+    <div class="err" id="errBox"></div>
+    <div class="status" id="statusBox">Memverifikasi akun Google...</div>
+    <div class="gsi-wrap" id="gsiBtnWrap"></div>
+    <p class="gsi-hint" id="gsiHint" style="display:none;"></p>
+
+    <details class="fallback" id="fallbackBox">
+      <summary>Login Alternatif (Username &amp; Password)</summary>
+      <form id="loginForm">
+        <div class="field">
+          <label for="u">Username</label>
+          <input id="u" type="text" autocomplete="username" placeholder="Username" required />
+        </div>
+        <div class="field">
+          <label for="p">Password</label>
+          <input id="p" type="password" autocomplete="current-password" placeholder="Password" required />
+        </div>
+        <button id="btn" type="submit">Masuk</button>
+      </form>
+    </details>
+  </div>
+
+<script>
+var providersCfg = null;
+var gsiScriptReady = false;
+var gsiInitialized = false;
+
+function showErr(msg) {
+  var errBox = document.getElementById('errBox');
+  if (!msg) {
+    errBox.classList.remove('show');
+    errBox.textContent = '';
+    return;
+  }
+  errBox.textContent = msg;
+  errBox.classList.add('show');
+}
+
+function setStatus(on, txt) {
+  var st = document.getElementById('statusBox');
+  if (txt) st.textContent = txt;
+  st.classList.toggle('show', !!on);
+}
+
+async function handleGoogleCredential(response) {
+  showErr('');
+  if (!response || !response.credential) {
+    showErr('Gagal menerima kredensial Google.');
+    return;
+  }
+  setStatus(true, 'Memverifikasi akun Google...');
+  try {
+    var r = await fetch('/api/auth/google', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: response.credential })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      showErr(d.error || ('Autentikasi Google ditolak (HTTP ' + r.status + ')'));
+      return;
+    }
+    window.location.replace('/');
+  } catch (e) {
+    showErr('Gagal terhubung ke server autentikasi.');
+  } finally {
+    setStatus(false);
+  }
+}
+
+function tryRenderGSI() {
+  if (gsiInitialized || !providersCfg) return;
+  if (!providersCfg.google_enabled || !providersCfg.google_client_id) {
+    var hint = document.getElementById('gsiHint');
+    hint.textContent = 'Google Sign-In belum dikonfigurasi.';
+    hint.style.display = 'block';
+    return;
+  }
+  if (!gsiScriptReady || !window.google || !window.google.accounts || !window.google.accounts.id) {
+    return;
+  }
+  gsiInitialized = true;
+  try {
+    window.google.accounts.id.initialize({
+      client_id: providersCfg.google_client_id,
+      callback: handleGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+    window.google.accounts.id.renderButton(
+      document.getElementById('gsiBtnWrap'),
+      { theme: 'filled_black', size: 'large', shape: 'rectangular', text: 'signin_with', width: 320 }
+    );
+  } catch (e) {
+    var hint = document.getElementById('gsiHint');
+    hint.textContent = 'Pastikan origin URL ini terdaftar di Google Cloud Console OAuth Client ID.';
+    hint.style.display = 'block';
+  }
+}
+
+function onGSIScriptReady() {
+  gsiScriptReady = true;
+  tryRenderGSI();
+}
+
+(async function initProviders() {
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    gsiScriptReady = true;
+  }
+  try {
+    var r = await fetch('/api/auth/providers', { credentials: 'same-origin' });
+    if (r.ok) {
+      providersCfg = await r.json();
+      if (providersCfg.password_enabled) {
+        document.getElementById('fallbackBox').classList.add('visible');
+      }
+      tryRenderGSI();
+    }
+  } catch (e) {
+    showErr('Gagal memuat konfigurasi login.');
+  }
+})();
+
+document.getElementById('loginForm').addEventListener('submit', async function (ev) {
+  ev.preventDefault();
+  var u = document.getElementById('u').value.trim();
+  var p = document.getElementById('p').value;
+  var btn = document.getElementById('btn');
+  showErr('');
+  btn.disabled = true;
+  btn.textContent = 'Memverifikasi...';
+  try {
+    var r = await fetch('/api/auth/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      showErr(d.error || ('Login gagal (HTTP ' + r.status + ')'));
+      return;
+    }
+    window.location.replace('/');
+  } catch (e) {
+    showErr('Koneksi gagal.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Masuk';
+  }
+});
+</script>
+</body>
+</html>

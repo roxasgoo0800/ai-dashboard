@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"bytes"
@@ -101,7 +101,7 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/google", bytes.NewBufferString(`{"id_token":"`+tok+`"}`))
 		req.RemoteAddr = "127.0.0.1:12345"
-		withSecurity(handleAuthGoogle)(rr, req)
+		WithSecurity(HandleAuthGoogle)(rr, req)
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200 for allowed email %s, got %d (%s)", em, rr.Code, rr.Body.String())
 		}
@@ -115,7 +115,7 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 		cookies := rr.Result().Cookies()
 		var jwtCookie, csrfCookie *http.Cookie
 		for _, c := range cookies {
-			if c.Name == authCookieName {
+			if c.Name == AuthCookieName {
 				jwtCookie = c
 			} else if c.Name == csrfCookieName {
 				csrfCookie = c
@@ -130,7 +130,7 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 		pwReq.AddCookie(jwtCookie)
 		pwReq.Header.Set("X-CSRF-Token", csrfCookie.Value)
 		pwRec := httptest.NewRecorder()
-		withAuth(handleAuthChangePassword)(pwRec, pwReq)
+		WithAuth(HandleAuthChangePassword)(pwRec, pwReq)
 		if pwRec.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 on password change for google session, got %d", pwRec.Code)
 		}
@@ -140,14 +140,14 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 		loReq.AddCookie(jwtCookie)
 		loReq.Header.Set("X-CSRF-Token", csrfCookie.Value)
 		loRec := httptest.NewRecorder()
-		withSecurity(handleAuthLogout)(loRec, loReq)
+		WithSecurity(HandleAuthLogout)(loRec, loReq)
 		if loRec.Code != http.StatusOK {
 			t.Fatalf("expected 200 logout, got %d", loRec.Code)
 		}
 		meReq := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
 		meReq.AddCookie(jwtCookie)
 		meRec := httptest.NewRecorder()
-		handleAuthMe(meRec, meReq)
+		HandleAuthMe(meRec, meReq)
 		if meRec.Code != http.StatusUnauthorized {
 			t.Fatalf("expected 401 after logout revocation, got %d", meRec.Code)
 		}
@@ -178,7 +178,7 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/google", bytes.NewBufferString(`{"id_token":"`+tok+`"}`))
 		req.RemoteAddr = "10.0.0." + string(rune('1'+i)) + ":1234"
-		withSecurity(handleAuthGoogle)(rr, req)
+		WithSecurity(HandleAuthGoogle)(rr, req)
 		if rr.Code != http.StatusUnauthorized {
 			t.Fatalf("%s: expected 401, got %d (%s)", bc.name, rr.Code, rr.Body.String())
 		}
@@ -186,7 +186,7 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 
 	// 3. Providers endpoint must never leak whitelist emails
 	provRec := httptest.NewRecorder()
-	withSecurity(handleAuthProviders)(provRec, httptest.NewRequest(http.MethodGet, "/api/auth/providers", nil))
+	WithSecurity(HandleAuthProviders)(provRec, httptest.NewRequest(http.MethodGet, "/api/auth/providers", nil))
 	if provRec.Code != http.StatusOK || strings.Contains(provRec.Body.String(), "roxas") {
 		t.Fatalf("providers leaked or failed: %d %s", provRec.Code, provRec.Body.String())
 	}
@@ -194,7 +194,7 @@ func TestGoogleAuthFlowAndWhitelist(t *testing.T) {
 	// 4. Password login disabled when allowPassword=false
 	m.allowPassword = false
 	pwdRec := httptest.NewRecorder()
-	withSecurity(handleAuthLogin)(pwdRec, httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"rizal","password":"x"}`)))
+	WithSecurity(HandleAuthLogin)(pwdRec, httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"rizal","password":"x"}`)))
 	if pwdRec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when password login disabled, got %d", pwdRec.Code)
 	}
