@@ -47,7 +47,40 @@ go build -o ai-dashboard .
 ./ai-dashboard
 ```
 
-Authentication is controlled with `AUTH_MODE` (default: `development`). Development mode enables username/password login; use `AUTH_MODE=google` to require Google Sign-In. The initial development account credentials are generated into `initial_credentials.txt` if no local user exists. Existing accounts in `auth_config.json` are preserved.
+### Configuration & flags
+
+| Flag | Environment variable | Default | Description |
+| --- | --- | --- | --- |
+| `-addr` | — | `0.0.0.0:8095` | HTTP listen address. |
+| `-mode` | — | `hybrid` | Server mode: `hybrid`, `backend`, or `frontend`. |
+| `-auth-mode` | `AUTH_MODE` | `development` | Authentication mode: `development` enables username/password; `google` requires Google Sign-In. |
+| `-backend-url` | `BACKEND_URL` | — | Backend API URL when running in `frontend` mode. |
+| `-cors-origins` | — | — | Comma-separated allowed CORS origins for backend mode. |
+| `-google-client-id` | `GOOGLE_CLIENT_ID` | Built-in client ID | Google OAuth Client ID. |
+| `-allowed-emails` | `ALLOWED_EMAILS` | Stored/default whitelist | Comma-separated email whitelist for Google login. |
+| `-google-only` | — | `false` | Disable password login and allow Google login only. |
+| `-set-user` | — | — | Create or update a local username at startup (use with `-set-pass`). |
+| `-set-pass` | — | — | Password for `-set-user`. |
+| `-del-user` | — | — | Delete a local username at startup. |
+| `-set-only` | — | `false` | Apply user-management flags and exit without starting the server. |
+
+Examples:
+
+```bash
+# Local development login (default)
+AUTH_MODE=development ./ai-dashboard
+
+# Require Google Sign-In
+AUTH_MODE=google ./ai-dashboard
+
+# Create/update a local account, then exit
+./ai-dashboard -set-user rizal -set-pass 'change-this-password' -set-only
+
+# Run the frontend proxy against a backend server
+BACKEND_URL=http://192.168.1.10:8095 ./ai-dashboard -mode=frontend
+```
+
+If no local account exists, the initial development account credentials are generated into `initial_credentials.txt`. Existing accounts in `auth_config.json` are preserved.
 
 Cross-compile for Raspberry Pi (`arm64`):
 
