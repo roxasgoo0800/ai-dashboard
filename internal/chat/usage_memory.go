@@ -1,6 +1,8 @@
 package chat
 
 import (
+	"ai-dashboard/internal/config"
+
 	"ai-dashboard/internal/telemetry"
 	"bytes"
 	"encoding/json"
@@ -63,23 +65,23 @@ type UsageRecommendation struct {
 }
 
 type UsageSummaryResponse struct {
-	Month                string                `json:"month"` // YYYY-MM
-	Today                string                `json:"today"` // YYYY-MM-DD
-	TotalTokens          int                   `json:"total_tokens"`
-	MonthTokens          int                   `json:"month_tokens"`
-	TodayTokens          int                   `json:"today_tokens"`
-	TotalRequests        int                   `json:"total_requests"`
-	MonthRequests        int                   `json:"month_requests"`
-	AvgTokPerSec         float64               `json:"avg_tok_per_sec"`
-	ActiveDays           int                   `json:"active_days"`
-	StreakDays           int                   `json:"streak_days"`
-	GoalRuns             int                   `json:"goal_runs"`
-	PeakDay              UsagePeakDay          `json:"peak_day"`
-	EstCloudSavingsUSD   float64               `json:"est_cloud_savings_usd"`
-	Daily                []DailyUsageItem      `json:"daily"`
-	ByModel              []ModelUsageItem      `json:"by_model"`
-	MonthByModel         []ModelUsageItem      `json:"month_by_model"`
-	Recommendations      []UsageRecommendation `json:"recommendations"`
+	Month              string                `json:"month"` // YYYY-MM
+	Today              string                `json:"today"` // YYYY-MM-DD
+	TotalTokens        int                   `json:"total_tokens"`
+	MonthTokens        int                   `json:"month_tokens"`
+	TodayTokens        int                   `json:"today_tokens"`
+	TotalRequests      int                   `json:"total_requests"`
+	MonthRequests      int                   `json:"month_requests"`
+	AvgTokPerSec       float64               `json:"avg_tok_per_sec"`
+	ActiveDays         int                   `json:"active_days"`
+	StreakDays         int                   `json:"streak_days"`
+	GoalRuns           int                   `json:"goal_runs"`
+	PeakDay            UsagePeakDay          `json:"peak_day"`
+	EstCloudSavingsUSD float64               `json:"est_cloud_savings_usd"`
+	Daily              []DailyUsageItem      `json:"daily"`
+	ByModel            []ModelUsageItem      `json:"by_model"`
+	MonthByModel       []ModelUsageItem      `json:"month_by_model"`
+	Recommendations    []UsageRecommendation `json:"recommendations"`
 }
 
 var (
@@ -535,14 +537,14 @@ type MemoryFlushLogEntry struct {
 }
 
 type MemoryStatusResponse struct {
-	RAM          telemetry.RAMMetrics            `json:"ram"`
-	GPU          telemetry.GPUMetrics            `json:"gpu"`
-	OllamaModels []telemetry.OllamaModelInfo     `json:"ollama_models"`
-	Comfy        telemetry.ComfyMetrics          `json:"comfy"`
-	Runtime      GoRuntimeMemInfo      `json:"runtime"`
-	ChatStore    ChatStoreMemInfo      `json:"chat_store"`
-	TopProcs     []telemetry.ProcessMemInfo      `json:"top_procs"`
-	RecentFlush  []MemoryFlushLogEntry `json:"recent_flush"`
+	RAM          telemetry.RAMMetrics        `json:"ram"`
+	GPU          telemetry.GPUMetrics        `json:"gpu"`
+	OllamaModels []telemetry.OllamaModelInfo `json:"ollama_models"`
+	Comfy        telemetry.ComfyMetrics      `json:"comfy"`
+	Runtime      GoRuntimeMemInfo            `json:"runtime"`
+	ChatStore    ChatStoreMemInfo            `json:"chat_store"`
+	TopProcs     []telemetry.ProcessMemInfo  `json:"top_procs"`
+	RecentFlush  []MemoryFlushLogEntry       `json:"recent_flush"`
 }
 
 var (
@@ -655,14 +657,14 @@ func unloadOllamaModels(targetModel string) (int, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	if strings.TrimSpace(targetModel) != "" {
 		payload, _ := json.Marshal(map[string]any{"model": targetModel, "keep_alive": 0})
-		resp, err := client.Post("http://127.0.0.1:11434/api/generate", "application/json", bytes.NewReader(payload))
+		resp, err := client.Post(config.OllamaURL()+"/api/generate", "application/json", bytes.NewReader(payload))
 		if err != nil {
 			return 0, err
 		}
 		resp.Body.Close()
 		return 1, nil
 	}
-	resp, err := client.Get("http://127.0.0.1:11434/api/ps")
+	resp, err := client.Get(config.OllamaURL() + "/api/ps")
 	if err != nil {
 		return 0, err
 	}
@@ -682,7 +684,7 @@ func unloadOllamaModels(targetModel string) (int, error) {
 	unloaded := 0
 	for _, m := range psData.Models {
 		payload, _ := json.Marshal(map[string]any{"model": m.Name, "keep_alive": 0})
-		if r2, err := client.Post("http://127.0.0.1:11434/api/generate", "application/json", bytes.NewReader(payload)); err == nil {
+		if r2, err := client.Post(config.OllamaURL()+"/api/generate", "application/json", bytes.NewReader(payload)); err == nil {
 			r2.Body.Close()
 			unloaded++
 		}
@@ -693,7 +695,7 @@ func unloadOllamaModels(targetModel string) (int, error) {
 func flushComfyMemory() bool {
 	client := &http.Client{Timeout: 4 * time.Second}
 	payload := []byte(`{"unload_models":true,"free_memory":true}`)
-	resp, err := client.Post("http://127.0.0.1:8188/free", "application/json", bytes.NewReader(payload))
+	resp, err := client.Post(config.ComfyUIURL()+"/free", "application/json", bytes.NewReader(payload))
 	if err != nil {
 		return false
 	}
@@ -838,7 +840,7 @@ type MitigationAlert struct {
 	Title       string `json:"title"`
 	Evidence    string `json:"evidence,omitempty"`
 	Mitigation  string `json:"mitigation"`
-	ActionType  string `json:"action_type,omitempty"`  // flush_vram, flush_comfy, flush_all, restart_ollama, restart_mcp
+	ActionType  string `json:"action_type,omitempty"` // flush_vram, flush_comfy, flush_all, restart_ollama, restart_mcp
 	ActionLabel string `json:"action_label,omitempty"`
 }
 

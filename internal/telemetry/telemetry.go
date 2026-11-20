@@ -1,6 +1,8 @@
 package telemetry
 
 import (
+	"ai-dashboard/internal/config"
+
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -300,7 +302,7 @@ func ReadGPUMetrics() GPUMetrics {
 func readOllamaMetrics() OllamaMetrics {
 	var m OllamaMetrics
 	client := &http.Client{Timeout: 1200 * time.Millisecond}
-	resp, err := client.Get("http://127.0.0.1:11434/api/ps")
+	resp, err := client.Get(config.OllamaURL() + "/api/ps")
 	if err == nil {
 		defer resp.Body.Close()
 		m.Online = resp.StatusCode == http.StatusOK
@@ -456,7 +458,7 @@ func readOllamaMetrics() OllamaMetrics {
 func readComfyMetrics() ComfyMetrics {
 	var m ComfyMetrics
 	client := &http.Client{Timeout: 900 * time.Millisecond}
-	resp, err := client.Get("http://127.0.0.1:8188/queue")
+	resp, err := client.Get(config.ComfyUIURL() + "/queue")
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
@@ -596,7 +598,7 @@ func readInstalledModels(activeOllama []OllamaModelInfo) ([]InstalledModel, []In
 	var totalBytes int64
 
 	client := &http.Client{Timeout: 900 * time.Millisecond}
-	if resp, err := client.Get("http://127.0.0.1:11434/api/tags"); err == nil {
+	if resp, err := client.Get(config.OllamaURL() + "/api/tags"); err == nil {
 		defer resp.Body.Close()
 		var tagsData struct {
 			Models []struct {

@@ -4,6 +4,7 @@ dist/
 *.exe
 
 # Runtime state, logs & sensitive credentials
+.env
 auth_config.json
 initial_credentials.txt
 chats/

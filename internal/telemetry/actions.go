@@ -1,6 +1,8 @@
 package telemetry
 
 import (
+	"ai-dashboard/internal/config"
+
 	"bytes"
 	"encoding/json"
 	"io"
@@ -58,7 +60,7 @@ func HandleUnloadOllama(w http.ResponseWriter, r *http.Request) {
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	unloaded := 0
-	if resp, err := client.Get("http://127.0.0.1:11434/api/ps"); err == nil {
+	if resp, err := client.Get(config.OllamaURL() + "/api/ps"); err == nil {
 		defer resp.Body.Close()
 		var psData struct {
 			Models []struct {
@@ -68,7 +70,7 @@ func HandleUnloadOllama(w http.ResponseWriter, r *http.Request) {
 		if body, err := io.ReadAll(resp.Body); err == nil && json.Unmarshal(body, &psData) == nil {
 			for _, m := range psData.Models {
 				payload, _ := json.Marshal(map[string]any{"model": m.Name, "keep_alive": 0})
-				if r2, err := client.Post("http://127.0.0.1:11434/api/generate", "application/json", bytes.NewReader(payload)); err == nil {
+				if r2, err := client.Post(config.OllamaURL()+"/api/generate", "application/json", bytes.NewReader(payload)); err == nil {
 					r2.Body.Close()
 					unloaded++
 				}
@@ -87,7 +89,7 @@ func HandleFreeComfy(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	payload := []byte(`{"unload_models":true,"free_memory":true}`)
 	ok := false
-	if resp, err := client.Post("http://127.0.0.1:8188/free", "application/json", bytes.NewReader(payload)); err == nil {
+	if resp, err := client.Post(config.ComfyUIURL()+"/free", "application/json", bytes.NewReader(payload)); err == nil {
 		resp.Body.Close()
 		ok = resp.StatusCode == http.StatusOK
 	}
@@ -129,13 +131,13 @@ func HandleStopComfy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
-	if r1, err := client.Post("http://127.0.0.1:8188/interrupt", "application/json", nil); err == nil {
+	if r1, err := client.Post(config.ComfyUIURL()+"/interrupt", "application/json", nil); err == nil {
 		r1.Body.Close()
 	}
-	if r2, err := client.Post("http://127.0.0.1:8188/queue", "application/json", bytes.NewReader([]byte(`{"clear":true}`))); err == nil {
+	if r2, err := client.Post(config.ComfyUIURL()+"/queue", "application/json", bytes.NewReader([]byte(`{"clear":true}`))); err == nil {
 		r2.Body.Close()
 	}
-	if r3, err := client.Post("http://127.0.0.1:8188/free", "application/json", bytes.NewReader([]byte(`{"unload_models":true,"free_memory":true}`))); err == nil {
+	if r3, err := client.Post(config.ComfyUIURL()+"/free", "application/json", bytes.NewReader([]byte(`{"unload_models":true,"free_memory":true}`))); err == nil {
 		r3.Body.Close()
 	}
 	_ = exec.Command("pkill", "-TERM", "-f", "/home/rizal/Documents/ollama/comfyui/.venv/bin/python main.py").Run()

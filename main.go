@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,7 +20,55 @@ import (
 	"ai-dashboard/web"
 )
 
+func loadProjectEnv() error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	return loadEnvFile(filepath.Join(wd, ".env"))
+}
+
+func loadEnvFile(path string) error {
+	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for lineNo := 1; scanner.Scan(); lineNo++ {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+		key, value, ok := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			return fmt.Errorf(".env line %d: expected KEY=VALUE", lineNo)
+		}
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+			value = value[1 : len(value)-1]
+		}
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		if err := os.Setenv(key, value); err != nil {
+			return fmt.Errorf(".env line %d: %w", lineNo, err)
+		}
+	}
+	return scanner.Err()
+}
+
 func main() {
+	if err := loadProjectEnv(); err != nil {
+		log.Fatalf("Failed to load .env: %v", err)
+	}
+
 	addr := flag.String("addr", "0.0.0.0:8095", "HTTP listen address")
 	mode := flag.String("mode", "hybrid", "Run mode: hybrid | backend | frontend")
 	authMode := flag.String("auth-mode", os.Getenv("AUTH_MODE"), "Auth mode: development (username/password) | google")
