@@ -49,11 +49,11 @@ go build -o ai-dashboard .
 
 ### Configuration & flags
 
-The application loads a project `.env` file at startup. Values already supplied by the shell, Docker, or systemd take precedence; when `.env` is absent, those external environment values are used as-is. Copy `.env.example` to `.env` to configure local development. `.env` is ignored by Git. The supported variables are `AUTH_MODE`, `BACKEND_URL`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `OLLAMA_URL`, and `COMFYUI_URL`. Ollama and ComfyUI URLs default to `http://127.0.0.1:11434` and `http://127.0.0.1:8188` respectively.
+The application loads a project `.env` file at startup. Values already supplied by the shell, Docker, or systemd take precedence; when `.env` is absent, those external environment values are used as-is. Copy `.env.example` to `.env` to configure local development. `.env` is ignored by Git. The supported variables are `APP_ADDR`, `AUTH_MODE`, `BACKEND_URL`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `OLLAMA_URL`, and `COMFYUI_URL`. `APP_ADDR` defaults to `0.0.0.0:8095` (all network interfaces), while Ollama and ComfyUI URLs default to `http://127.0.0.1:11434` and `http://127.0.0.1:8188` respectively.
 
 | Flag | Environment variable | Default | Description |
 | --- | --- | --- | --- |
-| `-addr` | — | `0.0.0.0:8095` | HTTP listen address. |
+| `-addr` | `APP_ADDR` | `0.0.0.0:8095` | HTTP listen address. The default listens on all interfaces. |
 | `-mode` | — | `hybrid` | Server mode: `hybrid`, `backend`, or `frontend`. |
 | `-auth-mode` | `AUTH_MODE` | `development` | Authentication mode: `development` enables username/password; `google` requires Google Sign-In. |
 | `-backend-url` | `BACKEND_URL` | — | Backend API URL when running in `frontend` mode. |
@@ -81,6 +81,8 @@ AUTH_MODE=google ./ai-dashboard
 # Run the frontend proxy against a backend server
 BACKEND_URL=http://192.168.1.10:8095 ./ai-dashboard -mode=frontend
 ```
+
+With `APP_ADDR=0.0.0.0:8095`, open the app locally at `http://127.0.0.1:8095/` or through the machine's Tailscale IP at `http://100.74.64.82:8095/` (when connected to the same tailnet).
 
 `go run` compiles the application when started (with Go's build cache), so it is convenient for development but may perform more disk I/O than starting an already-built binary. To avoid recompiling on every restart, build once with `go build -o ai-dashboard .`, then start `./ai-dashboard`; both commands load the same project `.env` file.
 

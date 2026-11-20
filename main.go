@@ -69,7 +69,7 @@ func main() {
 		log.Fatalf("Failed to load .env: %v", err)
 	}
 
-	addr := flag.String("addr", "0.0.0.0:8095", "HTTP listen address")
+	addr := flag.String("addr", envOrDefault("APP_ADDR", "0.0.0.0:8095"), "HTTP listen address")
 	mode := flag.String("mode", "hybrid", "Run mode: hybrid | backend | frontend")
 	authMode := flag.String("auth-mode", os.Getenv("AUTH_MODE"), "Auth mode: development (username/password) | google")
 	backendURL := flag.String("backend-url", os.Getenv("BACKEND_URL"), "Backend API URL when -mode=frontend")
@@ -202,6 +202,13 @@ func main() {
 	fmt.Printf("  LAN    : http://192.168.1.7:8095\n")
 	fmt.Printf("========================================================================\n")
 	log.Fatal(http.ListenAndServe(*addr, nil))
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func startFrontendProxy(addr, backendRaw string) {
