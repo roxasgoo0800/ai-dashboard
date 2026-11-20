@@ -49,7 +49,7 @@ go build -o ai-dashboard .
 
 ### Configuration & flags
 
-The application loads a project `.env` file at startup. Values already supplied by the shell, Docker, or systemd take precedence; when `.env` is absent, those external environment values are used as-is. Copy `.env.example` to `.env` to configure local development. `.env` is ignored by Git. The supported variables are `APP_ADDR`, `AUTH_MODE`, `BACKEND_URL`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `OLLAMA_URL`, and `COMFYUI_URL`. `APP_ADDR` defaults to `0.0.0.0:8095` (all network interfaces), while Ollama and ComfyUI URLs default to `http://127.0.0.1:11434` and `http://127.0.0.1:8188` respectively.
+The application loads a project `.env` file at startup. Values already supplied by the shell, Docker, or systemd take precedence; when `.env` is absent, those external environment values are used as-is. Copy `.env.example` to `.env` to configure local development. `.env` is ignored by Git. The supported variables are `APP_ADDR`, `AUTH_MODE`, `DEV_AUTO_KILL_PORT`, `BACKEND_URL`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAILS`, `OLLAMA_URL`, and `COMFYUI_URL`. `APP_ADDR` defaults to `0.0.0.0:8095` (all network interfaces), while Ollama and ComfyUI URLs default to `http://127.0.0.1:11434` and `http://127.0.0.1:8188` respectively.
 
 | Flag | Environment variable | Default | Description |
 | --- | --- | --- | --- |
@@ -65,6 +65,8 @@ The application loads a project `.env` file at startup. Values already supplied 
 | `-set-pass` | — | — | Password for `-set-user`. |
 | `-del-user` | — | — | Delete a local username at startup. |
 | `-set-only` | — | `false` | Apply user-management flags and exit without starting the server. |
+
+In development mode, `DEV_AUTO_KILL_PORT=true` (default) releases TCP port `8095` before starting the server, so this works even when an older `go run main.go` instance is still running. It is never applied in `AUTH_MODE=google` mode. Set `DEV_AUTO_KILL_PORT=false` to disable this behavior.
 
 Examples:
 

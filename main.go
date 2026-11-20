@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -94,6 +97,11 @@ func main() {
 	if selectedAuthMode != "development" && selectedAuthMode != "google" {
 		log.Fatalf("Invalid auth mode %q (allowed: development, google)", selectedAuthMode)
 	}
+	if selectedAuthMode == "development" && envOrDefault("DEV_AUTO_KILL_PORT", "true") == "true" && !*setOnly {
+		if err := stopDevelopmentPort(*addr); err != nil {
+			log.Printf("[DEV] Tidak dapat membersihkan port %s: %v", *addr, err)
+		}
+	}
 
 	if err := auth.InitAuthManager(auth.AuthOptions{
 		Mode:           runMode,
@@ -112,6 +120,14 @@ func main() {
 	if *setOnly {
 		return
 	}
+
+	// Clean up any orphaned workspace folders in ~/Documents/chat on startup
+	go func() {
+		n := chat.CleanupOrphanChatFolders()
+		if n > 0 {
+			log.Printf("[Workspace] Cleaned up %d orphaned chat workspace folder(s)", n)
+		}
+	}()
 
 	http.HandleFunc("/api/health", auth.WithSecurity(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -209,6 +225,31 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func stopDevelopmentPort(addr string) error {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("alamat listen tidak valid: %w", err)
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return fmt.Errorf("port tidak valid: %s", port)
+	}
+	// This cleanup is deliberately restricted to the dashboard's development port.
+	// Production/Google mode never calls this function.
+	if portNumber != 8095 {
+		return nil
+	}
+	cmd := exec.Command("fuser", "-k", fmt.Sprintf("%d/tcp", portNumber))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// fuser exits non-zero when no process owns the port; that is normal.
+		if len(output) == 0 {
+			return nil
+		}
+		return fmt.Errorf("fuser: %s", strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func startFrontendProxy(addr, backendRaw string) {
