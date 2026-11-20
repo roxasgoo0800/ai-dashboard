@@ -62,6 +62,7 @@ type AuthConfig struct {
 
 type AuthOptions struct {
 	Mode           string
+	AuthMode       string
 	BackendURL     string
 	CorsCSV        string
 	SetUser        string
@@ -97,6 +98,7 @@ type AuthManager struct {
 	failMap        map[string]failBucket
 	corsOrigins    map[string]bool
 	runMode        string
+	authMode       string
 	backendURL     string
 	googleClientID string
 	allowedEmails  map[string]bool
@@ -201,6 +203,7 @@ func InitAuthManager(opts AuthOptions) error {
 		jwksKeys:       map[string]*rsa.PublicKey{},
 		httpClient:     &http.Client{Timeout: 8 * time.Second},
 		runMode:        opts.Mode,
+		authMode:       opts.AuthMode,
 		backendURL:     opts.BackendURL,
 	}
 	for _, o := range strings.Split(opts.CorsCSV, ",") {
@@ -262,7 +265,14 @@ func InitAuthManager(opts AuthOptions) error {
 		}
 	}
 
-	if opts.GoogleOnly {
+	if opts.AuthMode == "development" {
+		m.allowPassword = true
+		if m.cfg.AllowPasswordLogin == nil || !*m.cfg.AllowPasswordLogin {
+			t := true
+			m.cfg.AllowPasswordLogin = &t
+			changed = true
+		}
+	} else if opts.GoogleOnly {
 		f := false
 		if m.cfg.AllowPasswordLogin == nil || *m.cfg.AllowPasswordLogin {
 			m.cfg.AllowPasswordLogin = &f
@@ -672,7 +682,7 @@ func HandleAuthProviders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"google_enabled":   authMgr != nil && authMgr.googleClientID != "",
+		"google_enabled":   authMgr != nil && authMgr.googleClientID != "" && authMgr.authMode != "development",
 		"google_client_id": authMgr.googleClientID,
 		"password_enabled": authMgr != nil && authMgr.allowPassword,
 	})
@@ -870,6 +880,10 @@ func HandleAuthGoogle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if authMgr.authMode == "development" {
+		http.Error(w, `{"error":"Google login dinonaktifkan pada mode development"}`, http.StatusForbidden)
 		return
 	}
 	if !checkSameOriginOrCORS(r) {

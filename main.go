@@ -21,6 +21,7 @@ import (
 func main() {
 	addr := flag.String("addr", "0.0.0.0:8095", "HTTP listen address")
 	mode := flag.String("mode", "hybrid", "Run mode: hybrid | backend | frontend")
+	authMode := flag.String("auth-mode", os.Getenv("AUTH_MODE"), "Auth mode: development (username/password) | google")
 	backendURL := flag.String("backend-url", os.Getenv("BACKEND_URL"), "Backend API URL when -mode=frontend")
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated allowed CORS origins for -mode=backend")
 	setUser := flag.String("set-user", "", "Optional: create/update username at startup")
@@ -36,9 +37,17 @@ func main() {
 	if runMode != "hybrid" && runMode != "backend" && runMode != "frontend" {
 		log.Fatalf("Invalid -mode %q (allowed: hybrid, backend, frontend)", *mode)
 	}
+	selectedAuthMode := strings.ToLower(strings.TrimSpace(*authMode))
+	if selectedAuthMode == "" {
+		selectedAuthMode = "development"
+	}
+	if selectedAuthMode != "development" && selectedAuthMode != "google" {
+		log.Fatalf("Invalid auth mode %q (allowed: development, google)", selectedAuthMode)
+	}
 
 	if err := auth.InitAuthManager(auth.AuthOptions{
 		Mode:           runMode,
+		AuthMode:       selectedAuthMode,
 		BackendURL:     *backendURL,
 		CorsCSV:        *corsOrigins,
 		SetUser:        *setUser,
@@ -46,7 +55,7 @@ func main() {
 		DelUser:        *delUser,
 		GoogleClientID: *googleClientID,
 		AllowedEmails:  *allowedEmails,
-		GoogleOnly:     *googleOnly,
+		GoogleOnly:     *googleOnly || selectedAuthMode == "google",
 	}); err != nil {
 		log.Fatalf("Auth init failed: %v", err)
 	}

@@ -16,7 +16,7 @@ Self-hosted AI Workstation Console built with a modular **Go** backend and an em
 - **Memory & Flush Control + Live Logs**
   - 1-click Ollama VRAM unload, ComfyUI cache free, Go runtime GC, Linux page-cache drop, error diagnostics radar, and live `journalctl` / ComfyUI log console.
 - **Auth & Raspberry Pi Companion Support**
-  - Google OAuth Sign-In (`JWT HS256` + CSRF protection + email whitelist) and cross-compiled `linux/arm64` binary support for Raspberry Pi Wake-on-LAN control.
+  - Development username/password login and optional Google OAuth Sign-In (`JWT HS256` + CSRF protection + email whitelist), plus cross-compiled `linux/arm64` binary support for Raspberry Pi Wake-on-LAN control.
 
 ## Project Structure
 
@@ -46,6 +46,8 @@ go build -o ai-dashboard .
 # Run server (default :8095)
 ./ai-dashboard
 ```
+
+Authentication is controlled with `AUTH_MODE` (default: `development`). Development mode enables username/password login; use `AUTH_MODE=google` to require Google Sign-In. The initial development account credentials are generated into `initial_credentials.txt` if no local user exists. Existing accounts in `auth_config.json` are preserved.
 
 Cross-compile for Raspberry Pi (`arm64`):
 
